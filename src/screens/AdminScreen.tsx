@@ -12,7 +12,7 @@ import {
   useSettings,
 } from "../lib/store";
 import { getPeerCount, startLiveSync, useSyncStatus } from "../lib/sync";
-import { inr } from "../lib/pricing";
+import { inr, validateUpiVpa } from "../lib/pricing";
 import {
   IconDoc,
   IconPhoto,
@@ -309,7 +309,19 @@ function SettingsPanel() {
       </div>
       <div className="space-y-3 p-4">
         <Field label="UPI ID (VPA)">
-          <input value={upiId} onChange={(e) => setUpiId(e.target.value)} placeholder="aapka naam@okhdfcbank" className={inputCls} />
+          <input value={upiId} onChange={(e) => setUpiId(e.target.value)} placeholder="9723121192@hdfcbank" className={inputCls} />
+          {(() => {
+            const err = validateUpiVpa(upiId);
+            return err ? (
+              <span className="mt-1 block border border-magenta/50 bg-magenta/10 px-2 py-1 font-mono text-[10px] font-bold tracking-wide text-magenta">
+                ⚠ {err}
+              </span>
+            ) : (
+              <span className="mt-1 block font-mono text-[10px] font-bold tracking-wide text-leaf">
+                ✓ Valid UPI ID — payment is par aayegi
+              </span>
+            );
+          })()}
         </Field>
         <Field label="Payee Name">
           <input value={payee} onChange={(e) => setPayee(e.target.value)} placeholder="Aapki dukaan ka naam" className={inputCls} />

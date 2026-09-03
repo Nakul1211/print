@@ -38,11 +38,11 @@ export function Header() {
             <span className="absolute -top-1.5 -right-1.5 h-3 w-3 rounded-full border border-ink bg-cyan" />
             <span className="absolute -bottom-1.5 -right-1.5 h-3 w-3 rounded-full border border-ink bg-magenta" />
           </div>
-          <div className="leading-tight">
-            <p className="font-display text-lg tracking-wide sm:text-xl">
+          <div className="min-w-0 leading-tight">
+            <p className="font-display text-sm tracking-wide break-words sm:text-lg lg:text-xl">
               JAY <span className="text-cyan">DWARKADHISH</span> <span className="text-magenta">SHOP</span>
             </p>
-            <p className="font-mono text-[10px] font-semibold tracking-[0.28em] text-ink-soft uppercase">
+            <p className="font-mono text-[9px] font-semibold tracking-[0.22em] text-ink-soft uppercase sm:text-[10px]">
               Print & Copy Kiosk · No. 01
             </p>
           </div>

@@ -25,13 +25,13 @@ export default function IdleScreen({ onStart }: { onStart: () => void }) {
         </p>
 
         <h1 className="font-display leading-[0.92] tracking-wide uppercase">
-          <span className="block text-6xl sm:text-7xl lg:text-8xl">
+          <span className="block text-5xl sm:text-7xl lg:text-8xl">
             Scan<span className="text-cyan">.</span>
           </span>
-          <span className="block text-6xl text-ink-soft/70 sm:text-7xl lg:text-8xl">
+          <span className="block text-5xl text-ink-soft/70 sm:text-7xl lg:text-8xl">
             Upload<span className="text-magenta">.</span>
           </span>
-          <span className="mt-2 inline-block -rotate-1 border-2 border-ink bg-yellow px-4 py-1 text-6xl shadow-press sm:text-7xl lg:text-8xl">
+          <span className="mt-2 inline-block -rotate-1 border-2 border-ink bg-yellow px-3 py-1 text-5xl shadow-press sm:px-4 sm:text-7xl lg:text-8xl">
             Print<span className="text-magenta">.</span>
           </span>
         </h1>

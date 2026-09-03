@@ -25,6 +25,7 @@ export default function PaymentScreen({ quote, options, onSuccess, onBack }: Pro
   const settings = useSettings();
   const [phase, setPhase] = useState<Phase>("pay");
   const [opened, setOpened] = useState(false);
+  const [noApp, setNoApp] = useState(false);
   const orderIdRef = useRef(makeOrderId());
   const orderId = orderIdRef.current;
   const amount = quote.total;
@@ -53,7 +54,7 @@ export default function PaymentScreen({ quote, options, onSuccess, onBack }: Pro
     return () => window.clearTimeout(t);
   }, [phase, amount, orderId, onSuccess]);
 
-  /* silent fallback: link copy ho jata hai agar app na khule */
+  /* silent fallback: link copy ho jata hai; app na khule toh QR hint */
   const openUpi = () => {
     if (phase !== "pay") return;
     try {
@@ -69,7 +70,12 @@ export default function PaymentScreen({ quote, options, onSuccess, onBack }: Pro
       /* clipboard unavailable */
     }
     setOpened(true);
-    window.setTimeout(() => setOpened(false), 3200);
+    setNoApp(false);
+    /* agar 2.2s baad bhi page foreground mein hai → koi UPI app nahi khuli */
+    window.setTimeout(() => {
+      if (document.visibilityState === "visible") setNoApp(true);
+    }, 2200);
+    window.setTimeout(() => setOpened(false), 4200);
   };
 
   return (
@@ -167,8 +173,19 @@ export default function PaymentScreen({ quote, options, onSuccess, onBack }: Pro
 
             {opened && (
               <p className="pop-in mt-2 flex items-center gap-2 font-mono text-[10px] font-bold tracking-wider text-leaf uppercase">
-                <IconCheck size={13} /> Payment link copy bhi ho gaya — app na khule toh link paste karo
+                <IconCheck size={13} /> Payment link copy bhi ho gaya
               </p>
+            )}
+            {noApp && (
+              <div className="pop-in mt-2 border-2 border-amber bg-amber/15 px-3 py-2">
+                <p className="font-mono text-[10px] font-bold tracking-wider text-ink uppercase">
+                  UPI app nahi khuli?
+                </p>
+                <p className="mt-0.5 text-xs leading-snug font-medium text-ink-soft">
+                  Phone mein GPay/PhonePe/Paytm install karo — ya{" "}
+                  <b className="text-ink">dusre phone se upar ka QR scan</b> karke {inr(amount)} pay karo.
+                </p>
+              </div>
             )}
 
             {/* mini steps */}

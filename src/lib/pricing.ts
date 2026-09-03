@@ -35,10 +35,39 @@ export const RATES = {
 
 export const SHOP = {
   name: "Jay Dwarkadhish Shop",
-  vpa: "9723121192@hdfc",
+  vpa: "9723121192@hdfcbank",
   address: "Jay Dwarkadhish Shop · Print & Copy",
   gstin: "07ABCDE1234F1Z5",
 };
+
+/* ---- UPI VPA validation (NPCI handle list — common banks/apps) ---- */
+const KNOWN_UPI_HANDLES = [
+  "hdfcbank", "ybl", "paytm", "okhdfcbank", "okaxis", "oksbi", "okicici",
+  "axisbank", "icici", "sbi", "pnb", "barodampay", "unionbank", "idbi",
+  "kotak", "indus", "rbl", "sbin", "cnrb", "fbl", "apl", "ibl", "ptsbi",
+  "payzapp", "airtel", "freecharge", "myicici", "ubi", "cbin", "andb",
+  "allbank", "jupitermoney", "naviaxis", "navihdfcbank", "navigoaxis",
+  "naviicici", "navipnb", "navisbi", "naviyesbank", "yesbank", "mahabank",
+  "bom", "centralbank", "dbs", "federal", "indianbank", "iob", "jsbp",
+  "kaypay", "lvbank", "obc", "pingpay", "synd", "syndicate", "tjsb",
+  "united", "vijb", "vjb", "wb", "yesbankltd", "psb", "ucobank",
+];
+
+/** Returns null if valid, otherwise an error message (payment would fail). */
+export function validateUpiVpa(vpa: string): string | null {
+  const v = vpa.trim();
+  if (!v) return "UPI ID khali hai";
+  const at = v.lastIndexOf("@");
+  if (at <= 0 || at === v.length - 1) return "Sahi format: naam@bank (jaise 9723121192@hdfcbank)";
+  const local = v.slice(0, at);
+  const handle = v.slice(at + 1).toLowerCase();
+  if (!/^[a-zA-Z0-9._-]{2,49}$/.test(local)) return "Naam/number mein sirf letters, digits, . _ - allowed hain";
+  if (!/^[a-z]{2,30}$/.test(handle)) return "Bank handle mein sirf letters hote hain";
+  if (!KNOWN_UPI_HANDLES.includes(handle)) {
+    return `@${handle} unknown handle hai — payment fail hogi. HDFC ke liye @hdfcbank use karo`;
+  }
+  return null;
+}
 
 export const inr = (n: number) =>
   "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 0 });
