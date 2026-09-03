@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { Component, useCallback, useState, type ReactNode } from "react";
 import type { PaymentRecord, PrintFile, PrintOptions } from "./lib/pricing";
 import { computeQuote } from "./lib/pricing";
 import { AmbientBackground, Footer, Header, Stepper, Ticker } from "./components/Chrome";
@@ -23,6 +23,43 @@ const STEP_INDEX: Record<Step, number> = {
 };
 
 const DEFAULT_OPTIONS: PrintOptions = { color: "bw", duplex: false, size: "A4", copies: 1 };
+
+/* Catches any render/runtime error so the kiosk never shows a blank screen */
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-paper p-6" style={{ fontFamily: "Archivo, sans-serif", color: "#15172b" }}>
+          <div className="w-full max-w-lg border-2 border-[#15172b] bg-[#fbfbf6] p-8 shadow-[8px_8px_0_0_#15172b]">
+            <p className="font-mono text-[11px] font-bold tracking-[0.3em] uppercase" style={{ color: "#e5097f" }}>
+              ⚠ Press Jam — Kiosk Error
+            </p>
+            <h1 className="mt-3 text-4xl font-black uppercase">Machine atak gayi</h1>
+            <p className="mt-3 text-sm leading-relaxed opacity-80">
+              Kuch toot gaya hai. Error details neeche hain — page reload karke dobara try karo.
+            </p>
+            <pre className="mt-4 overflow-auto border-2 border-dashed border-[#15172b]/40 bg-[#f1f1ea] p-3 font-mono text-xs whitespace-pre-wrap">
+              {this.state.error.message}
+            </pre>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-6 w-full border-2 border-[#15172b] bg-[#ffd21f] px-6 py-3 text-lg font-black tracking-wide uppercase shadow-[3px_3px_0_0_#15172b] transition-transform hover:translate-x-0.5 hover:translate-y-0.5"
+            >
+              Reload Kiosk
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function App() {
   const [step, setStep] = useState<Step>("idle");
@@ -55,8 +92,9 @@ export default function App() {
   const showStepper = step !== "idle";
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <AmbientBackground />
+    <ErrorBoundary>
+      <div className="flex min-h-screen flex-col">
+        <AmbientBackground />
       <Header />
       <Ticker />
       {showStepper && <Stepper current={STEP_INDEX[step]} />}
@@ -102,6 +140,7 @@ export default function App() {
       </main>
 
       <Footer />
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 }
