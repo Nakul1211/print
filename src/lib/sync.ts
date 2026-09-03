@@ -260,67 +260,82 @@ async function connect() {
     connect: (url: string, opts: Record<string, unknown>) => MqttLike;
   };
 
+  if (typeof mqttLib?.connect !== "function") {
+    setStatus("offline");
+    return;
+  }
+
   let attempt = 0;
   const loop = () => {
-    const url = BROKERS[attempt % BROKERS.length];
-    brokerUrl = url;
-    setStatus("connecting");
-    let settled = false;
-    let c: MqttLike;
     try {
-      c = mqttLib.connect(url, {
-        clientId: SELF + Math.floor(Math.random() * 1e6).toString(36),
-        clean: true,
-        connectTimeout: 8000,
-        reconnectPeriod: 0,
-        keepalive: 30,
+      const url = BROKERS[attempt % BROKERS.length];
+      brokerUrl = url;
+      setStatus("connecting");
+      let settled = false;
+      let c: MqttLike;
+      try {
+        c = mqttLib.connect(url, {
+          clientId: SELF + Math.floor(Math.random() * 1e6).toString(36),
+          clean: true,
+          connectTimeout: 8000,
+          reconnectPeriod: 0,
+          keepalive: 30,
+        });
+      } catch {
+        throw new Error("mqtt connect throw");
+      }
+      client = c;
+
+      const fail = () => {
+        if (settled) return;
+        settled = true;
+        try {
+          c.end(true);
+        } catch {
+          /* noop */
+        }
+        attempt++;
+        setStatus("offline");
+        window.setTimeout(loop, 2500);
+      };
+      const guard = window.setTimeout(fail, 9000);
+
+      c.on("connect", () => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(guard);
+        attempt = 0;
+        client = c;
+        setStatus("live");
+        try {
+          c.subscribe(TOPIC);
+        } catch {
+          /* noop */
+        }
+        send({ t: "hi", role });
+        send({ t: "req" });
+      });
+      c.on("error", () => fail());
+      c.on("close", () => {
+        if (!settled) {
+          fail();
+        } else {
+          setStatus("offline");
+          window.setTimeout(loop, 3000);
+        }
+      });
+      c.on("message", (_topic: unknown, payload: unknown) => {
+        try {
+          handle(payload);
+        } catch {
+          /* bad packet — ignore */
+        }
       });
     } catch {
       attempt++;
-      window.setTimeout(loop, 1500);
-      return;
-    }
-    client = c;
-
-    const fail = () => {
-      if (settled) return;
-      settled = true;
-      try {
-        c.end(true);
-      } catch {
-        /* noop */
-      }
-      attempt++;
       setStatus("offline");
       window.setTimeout(loop, 2500);
-    };
-    const guard = window.setTimeout(fail, 9000);
-
-    c.on("connect", () => {
-      if (settled) return;
-      settled = true;
-      window.clearTimeout(guard);
-      attempt = 0;
-      client = c;
-      setStatus("live");
-      try {
-        c.subscribe(TOPIC);
-      } catch {
-        /* noop */
-      }
-      send({ t: "hi", role });
-      send({ t: "req" });
-    });
-    c.on("error", () => fail());
-    c.on("close", () => {
-      if (!settled) {
-        fail();
-      } else {
-        setStatus("offline");
-        window.setTimeout(loop, 3000);
-      }
-    });
-    c.on("message", (_topic: unknown, payload: unknown) => handle(payload));
+    }
   };
   loop();
 }
@@ -346,18 +361,36 @@ if (typeof window !== "undefined") {
 /* ---------- public API ---------- */
 export function startLiveSync(r: SyncRole) {
   if (typeof window === "undefined") return;
-  role = r;
-  if (started) return;
+  if (started) {
+    role = r;
+    return;
+  }
   started = true;
+  role = r;
 
-  /* local store changes → relay par broadcast (kiosk + admin dono) */
-  setBroadcastHook((bm) => {
-    if (bm.t === "upsert") send({ t: "up", order: bm.order });
-    else if (bm.t === "delete") send({ t: "del", id: bm.id });
-    else send({ t: "clr" });
-  });
+  try {
+    /* local store changes → relay par broadcast (kiosk + admin dono) */
+    setBroadcastHook((bm) => {
+      try {
+        if (bm.t === "upsert") send({ t: "up", order: bm.order });
+        else if (bm.t === "delete") send({ t: "del", id: bm.id });
+        else send({ t: "clr" });
+      } catch {
+        /* broadcast fail — silent */
+      }
+    });
+  } catch {
+    /* noop */
+  }
 
-  void connect();
+  /* thoda defer karo — pehla paint kabhi block na ho */
+  window.setTimeout(() => {
+    try {
+      void connect();
+    } catch {
+      setStatus("offline");
+    }
+  }, 900);
 }
 
 export function getSyncStatus(): SyncStatus {
