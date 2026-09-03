@@ -1,6 +1,7 @@
 import QRCode from "react-qr-code";
 import { RATES, SHOP, inr } from "../lib/pricing";
-import { IconArrowR, IconDrops, IconDoc, IconFlip, IconMonoDrop, IconPhone, IconQr, IconReg } from "../components/icons";
+import { getKioskCode, useSyncStatus } from "../lib/sync";
+import { IconArrowR, IconDrops, IconDoc, IconFlip, IconMonoDrop, IconPhone, IconQr, IconReg, IconShield } from "../components/icons";
 
 const RATE_ROWS = [
   { icon: IconMonoDrop, label: "Black & White", sub: "per page, one side", price: RATES.bw.single, chip: "bg-ink text-paper" },
@@ -12,6 +13,8 @@ const RATE_ROWS = [
 
 export default function IdleScreen({ onStart }: { onStart: () => void }) {
   const kioskUrl = typeof window !== "undefined" ? window.location.href : "https://jaydwarkadhish.shop";
+  const syncCode = getKioskCode();
+  const syncStatus = useSyncStatus();
 
   return (
     <section className="mx-auto grid w-full max-w-6xl gap-10 px-4 pt-10 pb-16 lg:grid-cols-[1.15fr_0.85fr] lg:gap-14">
@@ -65,6 +68,31 @@ export default function IdleScreen({ onStart }: { onStart: () => void }) {
               </li>
             ))}
           </ul>
+        </div>
+
+        {/* admin live-sync code */}
+        <div className="card-lift mt-5 flex items-center gap-4 border-2 border-dashed border-ink bg-panel px-4 py-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center border-2 border-ink bg-cyan text-ink">
+            <IconShield size={20} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-mono text-[10px] font-bold tracking-[0.24em] text-ink-soft uppercase">
+              Admin Live-Sync Code — laptop par <span className="text-magenta">#/admin</span> mein daalein
+            </p>
+            <p className="font-display text-3xl tracking-[0.18em] text-ink tabular-nums">{syncCode}</p>
+          </div>
+          <span
+            className={`flex items-center gap-1.5 border-2 border-ink px-2 py-1 font-mono text-[9px] font-bold tracking-widest ${
+              syncStatus === "live"
+                ? "bg-leaf text-paper"
+                : syncStatus === "connecting"
+                  ? "bg-yellow text-ink"
+                  : "bg-paper text-ink-soft"
+            }`}
+          >
+            <span className={`h-1.5 w-1.5 rounded-full ${syncStatus === "live" ? "led bg-paper" : "bg-ink/40"}`} />
+            {syncStatus === "live" ? "LIVE" : syncStatus === "connecting" ? "LINKING" : "OFFLINE"}
+          </span>
         </div>
       </div>
 

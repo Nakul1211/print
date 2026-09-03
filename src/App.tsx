@@ -1,10 +1,11 @@
-import { Component, useCallback, useRef, useState } from "react";
+import { Component, useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import type { PaymentRecord, PrintFile, PrintOptions } from "./lib/pricing";
 import { computeQuote, inr } from "./lib/pricing";
 import { AmbientBackground, Footer, Header, Stepper, Ticker } from "./components/Chrome";
 import { getOrder, patchOrder, saveOrder, toMeta } from "./lib/store";
+import { getKioskCode, startKioskSync } from "./lib/sync";
 import IdleScreen from "./screens/IdleScreen";
 import UploadScreen from "./screens/UploadScreen";
 import OptionsScreen from "./screens/OptionsScreen";
@@ -82,6 +83,11 @@ function Kiosk() {
   optionsRef.current = options;
 
   const quote = computeQuote(files, options);
+
+  /* ---- realtime link: host this kiosk so admin devices can connect ---- */
+  useEffect(() => {
+    void startKioskSync(getKioskCode());
+  }, []);
 
   /* ---- live order sync → admin panel ---- */
   const syncFilesToOrder = useCallback((all: PrintFile[], eventLabel: string) => {

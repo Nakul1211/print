@@ -106,6 +106,18 @@ function subscribe(fn: () => void) {
   };
 }
 
+/* ---------- sync broadcast hook (set by the sync layer) ---------- */
+export type BroadcastMsg =
+  | { t: "upsert"; order: OrderRecord }
+  | { t: "delete"; id: string }
+  | { t: "clear" };
+
+let broadcastHook: ((m: BroadcastMsg) => void) | null = null;
+
+export function setBroadcastHook(fn: ((m: BroadcastMsg) => void) | null) {
+  broadcastHook = fn;
+}
+
 /* ---------- orders ---------- */
 export function getOrders(): OrderRecord[] {
   try {
@@ -127,15 +139,16 @@ export function getOrder(id: string): OrderRecord | undefined {
   return getOrders().find((o) => o.id === id);
 }
 
-export function saveOrder(rec: OrderRecord) {
+export function saveOrder(rec: OrderRecord, silent = false) {
   const list = getOrders();
   const i = list.findIndex((o) => o.id === rec.id);
   if (i >= 0) list[i] = rec;
   else list.unshift(rec);
   persistOrders(list);
+  if (!silent) broadcastHook?.({ t: "upsert", order: rec });
 }
 
-export function patchOrder(id: string, patch: Partial<OrderRecord>, event?: string) {
+export function patchOrder(id: string, patch: Partial<OrderRecord>, event?: string, silent = false) {
   const list = getOrders();
   const i = list.findIndex((o) => o.id === id);
   if (i < 0) return;
@@ -147,14 +160,17 @@ export function patchOrder(id: string, patch: Partial<OrderRecord>, event?: stri
     events: event ? [...cur.events, { at: Date.now(), label: event }] : cur.events,
   };
   persistOrders(list);
+  if (!silent) broadcastHook?.({ t: "upsert", order: list[i] });
 }
 
-export function deleteOrder(id: string) {
+export function deleteOrder(id: string, silent = false) {
   persistOrders(getOrders().filter((o) => o.id !== id));
+  if (!silent) broadcastHook?.({ t: "delete", id });
 }
 
-export function clearOrders() {
+export function clearOrders(silent = false) {
   persistOrders([]);
+  if (!silent) broadcastHook?.({ t: "clear" });
 }
 
 export function toMeta(files: PrintFile[]): OrderFileMeta[] {
