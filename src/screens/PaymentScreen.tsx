@@ -21,6 +21,14 @@ const STEPS = [
   { n: "3", text: "Neeche green button se payment confirm karo" },
 ];
 
+/* professional multi-stage UPI gateway (lazy 1-timer ki jagah) */
+const GATEWAY_STAGES = [
+  { label: "Payment request bheji gayi", detail: "UPI network par" },
+  { label: "Bank se secure connection", detail: "Encrypted channel" },
+  { label: "Amount verify ho raha hai", detail: "Balance check" },
+  { label: "Payment confirm", detail: "Reference generate" },
+];
+
 export default function PaymentScreen({ quote, options, onSuccess, onBack }: Props) {
   const settings = useSettings();
   const [phase, setPhase] = useState<Phase>("pay");
@@ -34,11 +42,20 @@ export default function PaymentScreen({ quote, options, onSuccess, onBack }: Pro
   const payee = settings.payeeName || SHOP.name;
   const qrValue = upiLink(amount, orderId, "upi", vpa, payee);
 
+  /* gateway stages advance karo — real processing jaisa feel */
+  const [stageIdx, setStageIdx] = useState(0);
   useEffect(() => {
-    if (phase !== "verifying") return;
-    const t = window.setTimeout(() => setPhase("success"), 2000);
+    if (phase !== "verifying") {
+      setStageIdx(0);
+      return;
+    }
+    if (stageIdx >= GATEWAY_STAGES.length) {
+      const t = window.setTimeout(() => setPhase("success"), 350);
+      return () => window.clearTimeout(t);
+    }
+    const t = window.setTimeout(() => setStageIdx((s) => s + 1), 620);
     return () => window.clearTimeout(t);
-  }, [phase]);
+  }, [phase, stageIdx]);
 
   useEffect(() => {
     if (phase !== "success") return;
@@ -234,14 +251,52 @@ export default function PaymentScreen({ quote, options, onSuccess, onBack }: Pro
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/70 p-4 backdrop-blur-[2px]">
           <div className="pop-in w-full max-w-sm border-2 border-ink bg-panel p-8 text-center shadow-press-lg">
             {phase === "verifying" ? (
-              <>
-                <IconReg size={46} className="animate-spin-slow mx-auto text-cyan" />
-                <h3 className="mt-4 font-display text-3xl tracking-wide uppercase">Payment verify…</h3>
-                <div className="shimmer-bar mx-auto mt-4 h-2.5 w-48 border-2 border-ink bg-cyan" />
-                <p className="mt-3 font-mono text-[11px] font-bold tracking-widest text-ink-soft uppercase">
-                  UPI network check ho raha hai
-                </p>
-              </>
+              <div className="text-left">
+                <div className="flex items-center justify-between border-b-2 border-ink/15 pb-3">
+                  <div>
+                    <p className="font-mono text-[10px] font-bold tracking-[0.28em] text-magenta uppercase">UPI Gateway</p>
+                    <p className="font-display text-2xl tracking-wide uppercase">Processing…</p>
+                  </div>
+                  <IconReg size={38} className="animate-spin-slow text-cyan" />
+                </div>
+
+                <ol className="mt-4 space-y-3">
+                  {GATEWAY_STAGES.map((s, i) => {
+                    const done = i < stageIdx;
+                    const active = i === stageIdx;
+                    return (
+                      <li
+                        key={i}
+                        className={`flex items-center gap-3 transition-opacity duration-300 ${
+                          done || active ? "opacity-100" : "opacity-30"
+                        }`}
+                      >
+                        <span
+                          className={`flex h-6 w-6 shrink-0 items-center justify-center border-2 border-ink ${
+                            done ? "bg-leaf text-paper" : active ? "bg-yellow" : "bg-panel"
+                          }`}
+                        >
+                          {done ? (
+                            <IconCheck size={13} />
+                          ) : (
+                            <span className={`h-2 w-2 rounded-full ${active ? "animate-pulse bg-ink" : "bg-ink/20"}`} />
+                          )}
+                        </span>
+                        <span className="flex-1 leading-tight">
+                          <span className="block text-sm font-bold">{s.label}</span>
+                          <span className="font-mono text-[10px] tracking-wider text-ink-soft uppercase">{s.detail}</span>
+                        </span>
+                        {active && <span className="font-mono text-[10px] font-bold tracking-widest text-magenta uppercase">…</span>}
+                      </li>
+                    );
+                  })}
+                </ol>
+
+                <div className="tear-line mt-4 flex items-center justify-between pt-3 font-mono text-[10px] font-bold tracking-widest text-ink-soft uppercase">
+                  <span>Order {orderId}</span>
+                  <span className="text-ink">{inr(amount)}</span>
+                </div>
+              </div>
             ) : (
               <>
                 <span className="pop-in mx-auto flex h-16 w-16 items-center justify-center border-2 border-ink bg-leaf text-paper shadow-press-sm">

@@ -12,7 +12,7 @@ import {
   useSettings,
 } from "../lib/store";
 import { getPeerCount, startLiveSync, useSyncStatus } from "../lib/sync";
-import { inr, validateUpiVpa } from "../lib/pricing";
+import { UPI_APP_HANDLES, inr, makeVpa, validateUpiVpa } from "../lib/pricing";
 import {
   IconDoc,
   IconPhoto,
@@ -270,6 +270,13 @@ function SettingsPanel() {
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  /* mobile number — current VPA se nikaalo ya default */
+  const [mobile, setMobile] = useState(() => {
+    const at = settings.upiId.indexOf("@");
+    const local = at > 0 ? settings.upiId.slice(0, at) : "";
+    return /^\d{10}$/.test(local) ? local : "9723121192";
+  });
+
   useEffect(() => {
     setUpiId(settings.upiId);
     setPayee(settings.payeeName);
@@ -277,6 +284,12 @@ function SettingsPanel() {
     setPin(settings.pin);
     setQr(settings.qrImage);
   }, [settings]);
+
+  /* app choose karo → sahi VPA khud ban jati hai */
+  const pickApp = (handle: string) => {
+    setUpiId(makeVpa(mobile, handle));
+  };
+  const activeHandle = upiId.includes("@") ? upiId.split("@")[1].toLowerCase() : "";
 
   const onQrFile = async (file?: File) => {
     if (!file) return;
@@ -308,8 +321,56 @@ function SettingsPanel() {
         <IconRupee size={16} />
       </div>
       <div className="space-y-3 p-4">
-        <Field label="UPI ID (VPA)">
-          <input value={upiId} onChange={(e) => setUpiId(e.target.value)} placeholder="9723121192@hdfcbank" className={inputCls} />
+        {/* ---- Smart VPA Builder: payment fail hone ka sabse bada reason galat handle hai ---- */}
+        <div className="border-2 border-dashed border-ink/40 bg-paper/60 p-3">
+          <p className="mb-2 font-mono text-[10px] font-bold tracking-[0.2em] text-magenta uppercase">
+            ⚡ Payment kis app se receive hoti hai?
+          </p>
+
+          <Field label="Aapka Mobile Number (UPI wala)">
+            <input
+              value={mobile}
+              onChange={(e) => {
+                const m = e.target.value.replace(/\D/g, "").slice(0, 10);
+                setMobile(m);
+                if (/^\d{10}$/.test(m) && activeHandle) setUpiId(makeVpa(m, activeHandle));
+              }}
+              inputMode="numeric"
+              placeholder="9723121192"
+              className={inputCls}
+            />
+          </Field>
+
+          <p className="mt-2 mb-1 font-mono text-[10px] font-bold tracking-[0.2em] text-ink-soft uppercase">
+            App select karo → VPA khud ban jayegi
+          </p>
+          <div className="grid grid-cols-2 gap-1.5">
+            {UPI_APP_HANDLES.map((a) => {
+              const on = activeHandle === a.handle;
+              return (
+                <button
+                  key={a.handle}
+                  onClick={() => pickApp(a.handle)}
+                  title={a.hint}
+                  className={`btn-press border-2 px-2 py-1.5 text-left transition-colors ${
+                    on
+                      ? "border-ink bg-ink text-paper shadow-press-sm"
+                      : "border-ink/50 bg-panel hover:bg-yellow/25"
+                  }`}
+                >
+                  <span className="block text-[11px] leading-tight font-bold">{a.app}</span>
+                  <span className={`font-mono text-[9px] tracking-wide ${on ? "text-yellow" : "text-ink-soft"}`}>
+                    @{a.handle}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <Field label="Ya pura UPI ID khud likho">
+            <input value={upiId} onChange={(e) => setUpiId(e.target.value)} placeholder="9723121192@okhdfcbank" className={inputCls} />
+          </Field>
+
           {(() => {
             const err = validateUpiVpa(upiId);
             return err ? (
@@ -318,11 +379,14 @@ function SettingsPanel() {
               </span>
             ) : (
               <span className="mt-1 block font-mono text-[10px] font-bold tracking-wide text-leaf">
-                ✓ Valid UPI ID — payment is par aayegi
+                ✓ Valid UPI ID — payment <b>{upiId}</b> par aayegi
               </span>
             );
           })()}
-        </Field>
+          <p className="mt-1.5 font-mono text-[9px] leading-relaxed tracking-wide text-ink-soft">
+            💡 GPay use karte ho? <b>@okhdfcbank</b> · PhonePe? <b>@ybl</b> · Paytm? <b>@paytm</b> — galat handle se payment fail hoti hai.
+          </p>
+        </div>
         <Field label="Payee Name">
           <input value={payee} onChange={(e) => setPayee(e.target.value)} placeholder="Aapki dukaan ka naam" className={inputCls} />
         </Field>

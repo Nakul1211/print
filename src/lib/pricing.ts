@@ -53,6 +53,21 @@ const KNOWN_UPI_HANDLES = [
   "united", "vijb", "vjb", "wb", "yesbankltd", "psb", "ucobank",
 ];
 
+/* ---- customer kaunsi UPI app use karta hai → uska sahi handle ---- */
+export const UPI_APP_HANDLES = [
+  { app: "Google Pay", handle: "okhdfcbank", hint: "GPay + HDFC account (sabse common)" },
+  { app: "PhonePe", handle: "ybl", hint: "PhonePe se UPI karte ho" },
+  { app: "Paytm", handle: "paytm", hint: "Paytm app se UPI" },
+  { app: "HDFC Bank App", handle: "hdfcbank", hint: "HDFC ke apne app se UPI register kiya" },
+  { app: "Axis Bank", handle: "axisbank", hint: "Axis account linked" },
+  { app: "SBI", handle: "sbi", hint: "SBI / YONO app" },
+] as const;
+
+/** Mobile number + app handle se VPA banao. */
+export function makeVpa(mobile: string, handle: string): string {
+  return `${mobile.trim()}@${handle}`;
+}
+
 /** Returns null if valid, otherwise an error message (payment would fail). */
 export function validateUpiVpa(vpa: string): string | null {
   const v = vpa.trim();
