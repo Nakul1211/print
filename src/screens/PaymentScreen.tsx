@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import confetti from "canvas-confetti";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import QRCode from "react-qr-code";
 import type { PaymentRecord, PrintOptions, Quote } from "../lib/pricing";
 import { SHOP, inr, makeOrderId, makeUpiRef, upiLink } from "../lib/pricing";
@@ -247,14 +247,35 @@ export default function PaymentScreen({ quote, options, onSuccess, onBack }: Pro
 }
 
 function ConfettiBurst() {
-  useEffect(() => {
+  const bits = useMemo(() => {
     const colors = ["#00a5c8", "#e5097f", "#ffd21f", "#15172b", "#178f4c"];
-    confetti({ particleCount: 90, spread: 75, origin: { y: 0.6 }, colors });
-    const t = window.setTimeout(
-      () => confetti({ particleCount: 60, spread: 100, origin: { y: 0.4 }, colors }),
-      250
-    );
-    return () => window.clearTimeout(t);
+    return Array.from({ length: 26 }, (_, i) => ({
+      left: 4 + Math.random() * 92,
+      cx: (Math.random() - 0.5) * 30,
+      dur: 1.6 + Math.random() * 1.2,
+      del: Math.random() * 0.45,
+      color: colors[i % colors.length],
+      round: Math.random() > 0.6,
+    }));
   }, []);
-  return null;
+  return (
+    <div aria-hidden="true">
+      {bits.map((b, i) => (
+        <span
+          key={i}
+          className="confetti-bit"
+          style={
+            {
+              left: `${b.left}%`,
+              background: b.color,
+              borderRadius: b.round ? "50%" : "2px",
+              "--cx": `${b.cx}vw`,
+              "--dur": `${b.dur}s`,
+              "--del": `${b.del}s`,
+            } as CSSProperties
+          }
+        />
+      ))}
+    </div>
+  );
 }

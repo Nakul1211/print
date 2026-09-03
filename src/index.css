@@ -233,6 +233,22 @@ body {
   75% { transform: translateX(-3px); }
 }
 
+/* ---------- payment confetti (pure CSS) ---------- */
+@keyframes confetti-fall {
+  0% { transform: translate3d(0, -8vh, 0) rotate(0deg); opacity: 1; }
+  85% { opacity: 1; }
+  100% { transform: translate3d(var(--cx, 0), 104vh, 0) rotate(680deg); opacity: 0; }
+}
+.confetti-bit {
+  position: fixed;
+  top: 0;
+  z-index: 70;
+  width: 9px;
+  height: 14px;
+  pointer-events: none;
+  animation: confetti-fall var(--dur, 2.1s) cubic-bezier(0.25, 0.4, 0.6, 1) var(--del, 0s) both;
+}
+
 /* ---------- receipt printing ---------- */
 @media print {
   body * {

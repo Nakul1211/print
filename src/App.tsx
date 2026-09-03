@@ -279,6 +279,7 @@ export default function App() {
   /* boot watchdog ke liye — app zinda hai */
   useEffect(() => {
     window.__JD_APP_MOUNTED__ = true;
+    if (window.__BOOT__) window.__BOOT__.stage = "mounted";
   }, []);
 
   return (
