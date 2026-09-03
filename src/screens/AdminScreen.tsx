@@ -15,11 +15,13 @@ import { inr } from "../lib/pricing";
 import {
   IconDoc,
   IconPhoto,
+  IconPrinter,
   IconQr,
   IconRupee,
   IconShield,
   IconTrash,
 } from "../components/icons";
+import PrintStation from "../components/PrintStation";
 
 /* ---------- status visuals ---------- */
 const STATUS_META: Record<OrderRecord["status"], { label: string; cls: string; rail: string }> = {
@@ -132,7 +134,7 @@ function PinGate({ pin, onOk }: { pin: string; onOk: () => void }) {
 }
 
 /* ---------- single order card ---------- */
-function OrderCard({ o }: { o: OrderRecord }) {
+function OrderCard({ o, onPrint }: { o: OrderRecord; onPrint: (o: OrderRecord) => void }) {
   const meta = STATUS_META[o.status];
   const [confirmDel, setConfirmDel] = useState(false);
 
@@ -219,12 +221,21 @@ function OrderCard({ o }: { o: OrderRecord }) {
         {/* actions */}
         <div className="mt-3 flex gap-2">
           {(o.status === "paid" || o.status === "printing") && (
-            <button
-              onClick={() => patchOrder(o.id, { status: "done" }, "Marked done by admin")}
-              className="btn-press flex-1 border-2 border-ink bg-leaf px-3 py-1.5 font-mono text-[11px] font-bold tracking-widest text-paper uppercase shadow-press-sm"
-            >
-              ✓ Mark Done
-            </button>
+            <>
+              <button
+                onClick={() => onPrint(o)}
+                className="btn-press group flex flex-1 items-center justify-center gap-2 border-2 border-ink bg-yellow px-3 py-2 font-display text-lg tracking-wide uppercase shadow-press-sm"
+              >
+                <IconPrinter size={18} className="transition-transform group-hover:-translate-y-0.5" />
+                Print Karo
+              </button>
+              <button
+                onClick={() => patchOrder(o.id, { status: "done" }, "Marked done by admin")}
+                className="btn-press border-2 border-ink bg-leaf px-3 py-1.5 font-mono text-[11px] font-bold tracking-widest text-paper uppercase shadow-press-sm"
+              >
+                ✓ Done
+              </button>
+            </>
           )}
           <button
             onClick={() => (confirmDel ? deleteOrder(o.id) : setConfirmDel(true))}
@@ -355,6 +366,7 @@ export default function AdminScreen() {
   const settings = useSettings();
   const [unlocked, setUnlocked] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [printOrder, setPrintOrder] = useState<OrderRecord | null>(null);
   const [toasts, setToasts] = useState<{ id: number; title: string; sub: string; tone: string }[]>([]);
 
   /* refresh relative times */
@@ -495,7 +507,7 @@ export default function AdminScreen() {
           ) : (
             <div className="space-y-4">
               {sorted.map((o) => (
-                <OrderCard key={o.id} o={o} />
+                <OrderCard key={o.id} o={o} onPrint={setPrintOrder} />
               ))}
             </div>
           )}
@@ -539,6 +551,19 @@ export default function AdminScreen() {
           </p>
         </aside>
       </main>
+
+      {/* ---------- print station overlay ---------- */}
+      {printOrder && (
+        <PrintStation
+          order={printOrder}
+          onClose={() => setPrintOrder(null)}
+          onDone={() => {
+            patchOrder(printOrder.id, { status: "done" }, "Printed from admin Print Station");
+            pushToast("✅ Order complete", `${printOrder.id} print ho gaya — DONE`, "bg-ink text-paper");
+            setPrintOrder(null);
+          }}
+        />
+      )}
 
       {/* ---------- live toasts ---------- */}
       <div className="pointer-events-none fixed top-4 right-4 z-50 flex w-72 flex-col gap-2">

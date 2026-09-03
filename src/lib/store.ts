@@ -11,6 +11,7 @@ import { SHOP } from "./pricing";
 export type OrderStatus = "files" | "paid" | "printing" | "done";
 
 export interface OrderFileMeta {
+  id: string;
   name: string;
   kind: "pdf" | "photo";
   pages: number;
@@ -158,6 +159,7 @@ export function clearOrders() {
 
 export function toMeta(files: PrintFile[]): OrderFileMeta[] {
   return files.map((f) => ({
+    id: f.id,
     name: f.name,
     kind: f.kind,
     pages: f.pages,

@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import type { PrintFile } from "../lib/pricing";
 import { formatSize } from "../lib/pricing";
 import { getPdfPageCount } from "../lib/pdf";
+import { putFile } from "../lib/filestore";
 import { IconArrowL, IconArrowR, IconDoc, IconPhoto, IconTrash, IconUpload } from "../components/icons";
 
 interface Props {
@@ -71,6 +72,8 @@ export default function UploadScreen({ files, onAdd, onRemove, onNext, onBack }:
           const thumb = await makeThumb(file);
           added.push({ id, name: file.name, kind: "photo", pages: 1, sizeLabel: formatSize(file.size), thumb });
         }
+        /* original file IndexedDB mein store karo — admin reprint ke liye */
+        void putFile(id, file).catch(() => {});
       }
 
       if (rejected.length) setError(`Skip ki gayi: ${rejected.join(", ")}`);
