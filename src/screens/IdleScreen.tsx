@@ -11,7 +11,7 @@ const RATE_ROWS = [
 ];
 
 export default function IdleScreen({ onStart }: { onStart: () => void }) {
-  const kioskUrl = typeof window !== "undefined" ? window.location.href : "https://quickprint.example";
+  const kioskUrl = typeof window !== "undefined" ? window.location.href : "https://jaydwarkadhish.shop";
 
   return (
     <section className="mx-auto grid w-full max-w-6xl gap-10 px-4 pt-10 pb-16 lg:grid-cols-[1.15fr_0.85fr] lg:gap-14">

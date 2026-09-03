@@ -204,7 +204,7 @@ export default function UploadScreen({ files, onAdd, onRemove, onNext, onBack }:
           <span className="text-cyan">PDF →</span> har page ₹5 (both sides ₹10/sheet)
         </p>
         <p className="font-mono text-[11px] leading-relaxed font-semibold tracking-wider text-paper/80">
-          <span className="text-magenta">PHOTO →</span> B&W ₹2 / Colour ₹10 per page
+          <span className="text-magenta">PHOTO →</span> B&W ₹5 / Colour ₹10 per page
         </p>
       </div>
 

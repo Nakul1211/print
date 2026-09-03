@@ -93,7 +93,7 @@ export default function PrintingScreen({ quote, options, payment, onComplete }: 
                 <span className="head-scan absolute top-0 h-full w-10 bg-magenta/80" />
               </div>
               <div className="mt-3 flex items-center justify-between">
-                <span className="font-display text-sm tracking-widest">QP-LASERJET 01</span>
+                <span className="font-display text-sm tracking-widest">JD-LASERJET 01</span>
                 <span className="flex gap-1.5">
                   <span className="h-2 w-2 rounded-full bg-cyan" />
                   <span className="h-2 w-2 rounded-full bg-magenta" />

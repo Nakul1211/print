@@ -440,7 +440,7 @@ export default function AdminScreen() {
                 PRESS ROOM <span className="text-yellow">ADMIN</span>
               </p>
               <p className="font-mono text-[10px] tracking-[0.28em] text-paper/50 uppercase">
-                QuickPrint Xpress · Live Orders
+                Jay Dwarkadhish Shop · Live Orders
               </p>
             </div>
           </div>

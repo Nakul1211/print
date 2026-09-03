@@ -28,15 +28,15 @@ export interface PaymentRecord {
 
 /** Rate card — prices fixed by the shop */
 export const RATES = {
-  bw: { single: 2, duplex: 4 },
+  bw: { single: 5, duplex: 10 },
   color: { single: 10, duplex: 20 },
   pdf: { single: 5, duplex: 10 },
 } as const;
 
 export const SHOP = {
-  name: "QuickPrint Xpress",
-  vpa: "quickprint.xpress@okhdfcbank",
-  address: "Shop 14, Nehru Market Rd",
+  name: "Jay Dwarkadhish Shop",
+  vpa: "jaydwarkadwhishshop.36698672@hdfcbank",
+  address: "Jay Dwarkadhish Shop · Print & Copy",
   gstin: "07ABCDE1234F1Z5",
 };
 
@@ -99,7 +99,7 @@ export function formatSize(bytes: number): string {
 export function makeOrderId(): string {
   const t = Date.now().toString(36).toUpperCase().slice(-4);
   const r = Math.floor(Math.random() * 90 + 10);
-  return `QP-${t}${r}`;
+  return `JD-${t}${r}`;
 }
 
 export function makeUpiRef(): string {

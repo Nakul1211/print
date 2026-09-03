@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { SHOP } from "../lib/pricing";
 import { IconCheck, IconReg, IconShield } from "./icons";
 
 /* ---------------- ambient layered background ---------------- */
@@ -33,16 +34,16 @@ export function Header() {
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
         <div className="flex items-center gap-3">
           <div className="relative flex h-10 w-10 items-center justify-center border-2 border-ink bg-ink shadow-press-sm">
-            <span className="font-display text-lg tracking-wide text-yellow">QP</span>
+            <span className="font-display text-lg tracking-wide text-yellow">JD</span>
             <span className="absolute -top-1.5 -right-1.5 h-3 w-3 rounded-full border border-ink bg-cyan" />
             <span className="absolute -bottom-1.5 -right-1.5 h-3 w-3 rounded-full border border-ink bg-magenta" />
           </div>
           <div className="leading-tight">
-            <p className="font-display text-xl tracking-wide">
-              QUICKPRINT <span className="text-cyan">XPRESS</span>
+            <p className="font-display text-lg tracking-wide sm:text-xl">
+              JAY <span className="text-cyan">DWARKADHISH</span> <span className="text-magenta">SHOP</span>
             </p>
             <p className="font-mono text-[10px] font-semibold tracking-[0.28em] text-ink-soft uppercase">
-              Self-service print kiosk · No. 01
+              Print & Copy Kiosk · No. 01
             </p>
           </div>
         </div>
@@ -71,12 +72,13 @@ export function Header() {
 
 /* ---------------- rate ticker ---------------- */
 const TICKER_ITEMS = [
-  "B&W ₹2 / PAGE",
-  "B&W BOTH SIDES ₹4",
+  "B&W ₹5 / PAGE",
+  "B&W BOTH SIDES ₹10",
   "COLOUR ₹10 / PAGE",
   "COLOUR BOTH SIDES ₹20",
   "PDF ₹5 / PAGE",
   "A4 & LEGAL SIZES",
+  "JAY DWARKADHISH SHOP",
   "UPI · GPAY · PAYTM · PHONEPE",
   "INSTANT RECEIPT",
 ];
@@ -152,10 +154,10 @@ export function Footer() {
     <footer className="mt-14 border-t-2 border-ink bg-ink py-4">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4">
         <p className="font-mono text-[10px] tracking-[0.2em] text-paper/60 uppercase">
-          QuickPrint Xpress · Shop 14, Nehru Market Rd
+          {SHOP.name} · {SHOP.address}
         </p>
         <p className="font-mono text-[10px] tracking-[0.2em] text-paper/60 uppercase">
-          UPI: quickprint.xpress@okhdfcbank
+          UPI: {SHOP.vpa}
         </p>
         <Link
           to="/admin"
