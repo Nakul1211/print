@@ -56,7 +56,7 @@ export interface KioskSettings {
 }
 
 const ORDERS_KEY = "qpx_orders_v1";
-const SETTINGS_KEY = "qpx_settings_v1";
+const SETTINGS_KEY = "qpx_settings_v2";
 
 export const DEFAULT_SETTINGS: KioskSettings = {
   upiId: SHOP.vpa,

@@ -35,7 +35,7 @@ export const RATES = {
 
 export const SHOP = {
   name: "Jay Dwarkadhish Shop",
-  vpa: "jaydwarkadwhishshop.36698672@hdfcbank",
+  vpa: "9723121192@hdfc",
   address: "Jay Dwarkadhish Shop · Print & Copy",
   gstin: "07ABCDE1234F1Z5",
 };
