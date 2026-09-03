@@ -5,7 +5,7 @@ import type { PaymentRecord, PrintFile, PrintOptions } from "./lib/pricing";
 import { computeQuote, inr } from "./lib/pricing";
 import { AmbientBackground, Footer, Header, Stepper, Ticker } from "./components/Chrome";
 import { getOrder, patchOrder, saveOrder, toMeta } from "./lib/store";
-import { getKioskCode, startKioskSync } from "./lib/sync";
+import { startLiveSync } from "./lib/sync";
 import IdleScreen from "./screens/IdleScreen";
 import UploadScreen from "./screens/UploadScreen";
 import OptionsScreen from "./screens/OptionsScreen";
@@ -84,9 +84,9 @@ function Kiosk() {
 
   const quote = computeQuote(files, options);
 
-  /* ---- realtime link: host this kiosk so admin devices can connect ---- */
+  /* ---- realtime cloud sync: orders har admin device par live jaate hain ---- */
   useEffect(() => {
-    void startKioskSync(getKioskCode());
+    startLiveSync("kiosk");
   }, []);
 
   /* ---- live order sync → admin panel ---- */

@@ -3,7 +3,18 @@ import type { OrderRecord } from "../lib/store";
 import { getFile } from "../lib/filestore";
 import { renderPdfPages } from "../lib/pdf";
 import { inr } from "../lib/pricing";
+import { requestFile } from "../lib/sync";
 import { IconCheck, IconPrinter } from "./icons";
+
+/** Image dataURL ke dimensions */
+function imgDims(src: string): Promise<{ w: number; h: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+    img.onerror = () => reject(new Error("image load failed"));
+    img.src = src;
+  });
+}
 
 /* Paper sizes @ ~150 DPI (white canvas, image drawn contain-fit) */
 const PAPER = {
@@ -54,6 +65,7 @@ export default function PrintStation({ order, onClose, onDone }: Props) {
   const [progress, setProgress] = useState("Files load ho rahi hain…");
   const [error, setError] = useState("");
   const [printing, setPrinting] = useState(false);
+  const [dling, setDling] = useState(false);
 
   const size = order.options?.size === "Legal" ? "Legal" : "A4";
   const paper = PAPER[size];
@@ -68,8 +80,21 @@ export default function PrintStation({ order, onClose, onDone }: Props) {
         for (const f of order.files) {
           if (cancelled) return;
           setProgress(`${f.name} load ho rahi hai…`);
-          const blob = await getFile(f.id);
-          if (!blob) throw new Error(`"${f.name}" store mein nahi mili (purana order?) — customer se dobara upload karwao`);
+          let blob = await getFile(f.id);
+          if (!blob) {
+            /* file isi device par nahi — kiosk se relay ke zariye mangwao */
+            setProgress(`${f.name} — kiosk device se mangwayi ja rahi hai…`);
+            blob =
+              (await requestFile(
+                f.id,
+                f.name,
+                f.kind === "pdf" ? "application/pdf" : "image/jpeg"
+              )) ?? undefined;
+          }
+          if (!blob)
+            throw new Error(
+              `"${f.name}" nahi mili. Kiosk device online hona chahiye (file wahin upload hui thi) — ya customer se dobara upload karwao.`
+            );
           if (f.kind === "pdf") {
             const rendered = await renderPdfPages(blob, paper.w, (done, total) => {
               if (!cancelled) setProgress(`${f.name} — page ${done}/${total} render ho raha hai…`);
@@ -105,6 +130,33 @@ export default function PrintStation({ order, onClose, onDone }: Props) {
     }
     return all;
   }, [pages, copies]);
+
+  /* ---------- PDF download (mobile: share/print via Android) ---------- */
+  const downloadPdf = async () => {
+    if (dling || printPages.length === 0) return;
+    setDling(true);
+    try {
+      const { jsPDF } = await import("jspdf");
+      const fmt: [number, number] = size === "Legal" ? [216, 356] : [210, 297];
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: fmt, compress: true });
+      const [pw, ph] = fmt;
+      let first = true;
+      for (const src of printPages) {
+        if (!first) doc.addPage(fmt, "portrait");
+        first = false;
+        const d = await imgDims(src);
+        const s = Math.min(pw / d.w, ph / d.h);
+        const w = d.w * s;
+        const h = d.h * s;
+        doc.addImage(src, "JPEG", (pw - w) / 2, (ph - h) / 2, w, h, undefined, "FAST");
+      }
+      doc.save(`${order.id}-jay-dwarkadhish.pdf`);
+    } catch {
+      /* download fail — ignore */
+    } finally {
+      setDling(false);
+    }
+  };
 
   /* ---------- print trigger + afterprint ---------- */
   useEffect(() => {
@@ -222,20 +274,33 @@ export default function PrintStation({ order, onClose, onDone }: Props) {
 
               {/* actions */}
               {phase === "ready" ? (
-                <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                  <button
-                    onClick={() => setPrinting(true)}
-                    className="btn-press group flex flex-1 items-center justify-center gap-3 border-2 border-ink bg-yellow px-6 py-4 font-display text-2xl tracking-wide uppercase shadow-press-sm"
-                  >
-                    <IconPrinter size={24} className="transition-transform group-hover:-translate-y-0.5" />
-                    {printing ? "Print dialog khul raha hai…" : `Print Karo (${totalSheets} sheet)`}
-                  </button>
-                  <button
-                    onClick={onClose}
-                    className="btn-press border-2 border-ink bg-panel px-5 py-3 font-mono text-xs font-bold tracking-widest uppercase shadow-press-sm"
-                  >
-                    Baad mein
-                  </button>
+                <div className="mt-4">
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <button
+                      onClick={() => setPrinting(true)}
+                      className="btn-press group flex flex-1 items-center justify-center gap-3 border-2 border-ink bg-yellow px-6 py-4 font-display text-2xl tracking-wide uppercase shadow-press-sm"
+                    >
+                      <IconPrinter size={24} className="transition-transform group-hover:-translate-y-0.5" />
+                      {printing ? "Print dialog khul raha hai…" : `Print Karo (${totalSheets} sheet)`}
+                    </button>
+                    <button
+                      onClick={() => void downloadPdf()}
+                      disabled={dling}
+                      className="btn-press flex items-center justify-center gap-2 border-2 border-ink bg-cyan px-5 py-3 font-display text-lg tracking-wide text-ink uppercase shadow-press-sm"
+                    >
+                      {dling ? "PDF ban rahi hai…" : "⤓ PDF Download"}
+                    </button>
+                    <button
+                      onClick={onClose}
+                      className="btn-press border-2 border-ink bg-panel px-5 py-3 font-mono text-xs font-bold tracking-widest uppercase shadow-press-sm"
+                    >
+                      Baad mein
+                    </button>
+                  </div>
+                  <p className="mt-2.5 border-2 border-dashed border-ink/35 bg-paper/70 px-3 py-2 font-mono text-[10px] leading-relaxed tracking-wider text-ink-soft uppercase">
+                    Mobile/Android: PRINT dabate hi system print sheet khulegi — printer chuno ya "Save as PDF" karo.
+                    Ya PDF download karke share/print karo.
+                  </p>
                 </div>
               ) : (
                 <div className="pop-in mt-4 border-2 border-ink bg-leaf p-4 text-paper shadow-press-sm">
@@ -245,12 +310,20 @@ export default function PrintStation({ order, onClose, onDone }: Props) {
                   <p className="mt-1 font-mono text-[11px] tracking-wider text-paper/85 uppercase">
                     Printer se sheets nikal gayi hain? Neeche dabao — order DONE mark ho jayega.
                   </p>
-                  <button
-                    onClick={onDone}
-                    className="btn-press mt-3 flex w-full items-center justify-center gap-2 border-2 border-ink bg-ink px-5 py-3 font-display text-xl tracking-wide text-paper uppercase shadow-[3px_3px_0_0_rgba(241,241,234,0.5)]"
-                  >
-                    <IconCheck size={20} /> Print Ho Gaya — Order Done
-                  </button>
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                    <button
+                      onClick={onDone}
+                      className="btn-press flex flex-1 items-center justify-center gap-2 border-2 border-ink bg-ink px-5 py-3 font-display text-xl tracking-wide text-paper uppercase shadow-[3px_3px_0_0_rgba(241,241,234,0.5)]"
+                    >
+                      <IconCheck size={20} /> Print Ho Gaya — Order Done
+                    </button>
+                    <button
+                      onClick={() => setPhase("ready")}
+                      className="btn-press border-2 border-ink bg-paper px-4 py-3 font-mono text-[11px] font-bold tracking-widest text-ink uppercase shadow-[3px_3px_0_0_rgba(21,23,43,0.4)]"
+                    >
+                      ↺ Phir se print
+                    </button>
+                  </div>
                 </div>
               )}
             </>

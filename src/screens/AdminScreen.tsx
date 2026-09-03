@@ -11,15 +11,7 @@ import {
   useOrders,
   useSettings,
 } from "../lib/store";
-import {
-  bootAdminSync,
-  connectAdmin,
-  disconnectAdmin,
-  enableAdminBroadcast,
-  getConnectedCode,
-  getSavedAdminCode,
-  useSyncStatus,
-} from "../lib/sync";
+import { getPeerCount, startLiveSync, useSyncStatus } from "../lib/sync";
 import { inr } from "../lib/pricing";
 import {
   IconDoc,
@@ -229,21 +221,27 @@ function OrderCard({ o, onPrint }: { o: OrderRecord; onPrint: (o: OrderRecord) =
 
         {/* actions */}
         <div className="mt-3 flex gap-2">
-          {(o.status === "paid" || o.status === "printing") && (
+          {o.status === "files" ? (
+            <span className="flex flex-1 cursor-not-allowed items-center justify-center gap-2 border-2 border-dashed border-ink/40 bg-paper px-3 py-2 font-mono text-[11px] font-bold tracking-widest text-ink-soft uppercase">
+              ₹ Payment ka intezaar…
+            </span>
+          ) : (
             <>
               <button
                 onClick={() => onPrint(o)}
                 className="btn-press group flex flex-1 items-center justify-center gap-2 border-2 border-ink bg-yellow px-3 py-2 font-display text-lg tracking-wide uppercase shadow-press-sm"
               >
                 <IconPrinter size={18} className="transition-transform group-hover:-translate-y-0.5" />
-                Print Karo
+                {o.status === "done" ? "Print / Reprint" : "Print Karo"}
               </button>
-              <button
-                onClick={() => patchOrder(o.id, { status: "done" }, "Marked done by admin")}
-                className="btn-press border-2 border-ink bg-leaf px-3 py-1.5 font-mono text-[11px] font-bold tracking-widest text-paper uppercase shadow-press-sm"
-              >
-                ✓ Done
-              </button>
+              {(o.status === "paid" || o.status === "printing") && (
+                <button
+                  onClick={() => patchOrder(o.id, { status: "done" }, "Marked done by admin")}
+                  className="btn-press border-2 border-ink bg-leaf px-3 py-1.5 font-mono text-[11px] font-bold tracking-widest text-paper uppercase shadow-press-sm"
+                >
+                  ✓ Done
+                </button>
+              )}
             </>
           )}
           <button
@@ -369,97 +367,73 @@ function SettingsPanel() {
   );
 }
 
-/* ---------- kiosk link (live sync connect) ---------- */
-function KioskLink() {
+/* ---------- live cloud sync panel (auto — no code) ---------- */
+function SyncPanel() {
   const syncStatus = useSyncStatus();
-  const [code, setCode] = useState(getSavedAdminCode());
-  const [shake, setShake] = useState(false);
-
-  const connect = () => {
-    const c = code.trim();
-    if (!/^\d{4}$/.test(c)) {
-      setShake(true);
-      window.setTimeout(() => setShake(false), 450);
-      return;
-    }
-    enableAdminBroadcast();
-    void connectAdmin(c);
-  };
-
+  const [peers, setPeers] = useState(getPeerCount());
+  useEffect(() => {
+    const t = setInterval(() => setPeers(getPeerCount()), 4000);
+    return () => clearInterval(t);
+  }, []);
   const linked = syncStatus === "live";
 
   return (
     <div className="border-2 border-ink bg-panel shadow-press">
       <div className="flex items-center justify-between border-b-2 border-ink bg-magenta px-4 py-2">
-        <span className="font-mono text-[11px] font-bold tracking-[0.3em] text-paper uppercase">Kiosk Live Link</span>
+        <span className="font-mono text-[11px] font-bold tracking-[0.3em] text-paper uppercase">Live Cloud Sync</span>
         <span
           className={`flex items-center gap-1.5 border border-paper/60 px-2 py-0.5 font-mono text-[9px] font-bold tracking-widest text-paper ${
             linked ? "" : "opacity-80"
           }`}
         >
-          <span className={`h-1.5 w-1.5 rounded-full ${linked ? "led bg-paper" : syncStatus === "connecting" ? "bg-yellow" : "bg-paper/40"}`} />
-          {linked ? "LINKED" : syncStatus === "connecting" ? "LINKING…" : "NOT LINKED"}
+          <span
+            className={`h-1.5 w-1.5 rounded-full ${
+              linked ? "led bg-paper" : syncStatus === "connecting" ? "bg-yellow" : "bg-paper/40"
+            }`}
+          />
+          {linked ? "CONNECTED" : syncStatus === "connecting" ? "LINKING…" : "OFFLINE"}
         </span>
       </div>
       <div className="p-4">
         {linked ? (
           <div className="pop-in">
-            <p className="text-sm leading-relaxed font-medium">
-              Kiosk <b className="font-mono">#{getConnectedCode()}</b> se <b className="text-leaf">live connection</b> hai —
-              phone par order aate hi yahan turant dikhega.
-            </p>
-            <div className="mt-3 flex items-center gap-2 border-2 border-dashed border-leaf/60 bg-leaf/10 px-3 py-2">
+            <div className="flex items-center gap-2 border-2 border-dashed border-leaf/60 bg-leaf/10 px-3 py-2.5">
               <span className="led h-2.5 w-2.5 rounded-full bg-leaf" />
               <p className="font-mono text-[10px] font-bold tracking-[0.18em] text-ink-soft uppercase">
-                Realtime sync chalu · auto-reconnect on
+                {peers > 0 ? `${peers + 1} devices linked · realtime` : "Realtime channel khula hai"}
               </p>
             </div>
-            <button
-              onClick={disconnectAdmin}
-              className="btn-press mt-3 w-full border-2 border-ink bg-paper px-3 py-1.5 font-mono text-[11px] font-bold tracking-widest uppercase shadow-press-sm hover:bg-magenta/15"
-            >
-              Disconnect
-            </button>
+            <p className="mt-3 text-xs leading-relaxed font-medium text-ink-soft">
+              Customer <b className="text-ink">kisi bhi phone</b> par file daale ya payment kare — order{" "}
+              <b className="text-ink">yahin live</b> aayega. Aap <b className="text-ink">kisi bhi device</b> par yeh admin
+              kholo — sab kuch sync milega. Koi code nahi.
+            </p>
           </div>
         ) : (
           <>
             <p className="text-xs leading-relaxed font-medium text-ink-soft">
-              Kiosk screen par dikha <b className="text-ink">4-digit code</b> daalein — uske baad customer ke orders,
-              payments aur files <b className="text-ink">isi laptop par live</b> aayenge.
+              {syncStatus === "connecting"
+                ? "Cloud relay se juda ja raha hai… (internet chahiye)"
+                : "Internet nahi mil raha — dobara koshish jaari hai. Local orders fir bhi dikhenge."}
             </p>
-            <div className={`mt-3 flex gap-2 ${shake ? "animate-[shake-x_0.4s_ease]" : ""}`}>
-              <input
-                value={code}
-                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                onKeyDown={(e) => e.key === "Enter" && connect()}
-                inputMode="numeric"
-                placeholder="••••"
-                className={`${inputCls} text-center font-display text-2xl tracking-[0.4em]`}
-              />
-              <button
-                onClick={connect}
-                disabled={syncStatus === "connecting"}
-                className="btn-press shrink-0 border-2 border-ink bg-ink px-4 font-display text-lg tracking-wide text-paper uppercase shadow-press-sm"
-              >
-                {syncStatus === "connecting" ? "…" : "Link"}
-              </button>
+            <div className="mt-3 h-2 border-2 border-ink bg-paper">
+              <div className="stripes-live h-full w-full opacity-60" />
             </div>
-            {syncStatus === "connecting" && (
-              <p className="mt-2 font-mono text-[10px] font-bold tracking-widest text-amber uppercase">Kiosk dhundh rahe hain…</p>
-            )}
-            <ol className="mt-3 space-y-1 border-t border-dashed border-ink/30 pt-2.5">
-              {[
-                "Phone par kiosk kholo (customer screen)",
-                "Wahan likha 4-digit code yahan daalo",
-                "Order aate hi LIVE feed mein dikhega 🔔",
-              ].map((s, i) => (
-                <li key={i} className="flex items-baseline gap-2 font-mono text-[10px] tracking-wider text-ink-soft">
-                  <span className="font-display text-sm text-magenta">{i + 1}</span> {s}
-                </li>
-              ))}
-            </ol>
           </>
         )}
+        <div className="tear-line mt-3 pt-2.5">
+          <ol className="space-y-1">
+            {[
+              "Customer phone par kiosk kholta hai",
+              "Upload/pay karte hi yahan order live aata hai 🔔",
+              "PRINT dabao — file khud kiosk se aa jaati hai",
+            ].map((s, i) => (
+              <li key={i} className="flex items-baseline gap-2 font-mono text-[10px] tracking-wider text-ink-soft">
+                <span className="font-display text-sm text-magenta">{i + 1}</span> {s}
+              </li>
+            ))}
+          </ol>
+        </div>
       </div>
     </div>
   );
@@ -470,6 +444,11 @@ export default function AdminScreen() {
   const orders = useOrders();
   const settings = useSettings();
   const syncStatus = useSyncStatus();
+  const [peerCount, setPeerCount] = useState(getPeerCount());
+  useEffect(() => {
+    const t = setInterval(() => setPeerCount(getPeerCount()), 4000);
+    return () => clearInterval(t);
+  }, []);
   const [unlocked, setUnlocked] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [printOrder, setPrintOrder] = useState<OrderRecord | null>(null);
@@ -482,9 +461,9 @@ export default function AdminScreen() {
     return () => clearInterval(t);
   }, []);
 
-  /* auto-link with the kiosk using the saved code */
+  /* cloud sync shuru karo — orders har device par live */
   useEffect(() => {
-    void bootAdminSync();
+    startLiveSync("admin");
   }, []);
 
   const pushToast = (title: string, sub: string, tone: string) => {
@@ -572,7 +551,9 @@ export default function AdminScreen() {
               />
               <span className="font-mono text-xs font-bold tracking-widest text-paper">
                 {syncStatus === "live"
-                  ? `KIOSK #${getConnectedCode()}`
+                  ? peerCount > 0
+                    ? `CLOUD · ${peerCount + 1} LINKED`
+                    : "CLOUD LIVE"
                   : syncStatus === "connecting"
                     ? "LINKING…"
                     : "LOCAL MODE"}
@@ -646,9 +627,9 @@ export default function AdminScreen() {
           )}
         </section>
 
-        {/* ---------- kiosk link + stats + settings ---------- */}
+        {/* ---------- live sync + stats + settings ---------- */}
         <aside className="space-y-6">
-          <KioskLink />
+          <SyncPanel />
 
           <div className="border-2 border-ink bg-ink p-5 shadow-press">
             <p className="font-mono text-[10px] font-bold tracking-[0.3em] text-paper/60 uppercase">Aaj ka Hisaab</p>

@@ -139,6 +139,14 @@ export function getOrder(id: string): OrderRecord | undefined {
   return getOrders().find((o) => o.id === id);
 }
 
+/** Remote se aaya order — sirf tab apply karo jab naya ho (cross-device merge). */
+export function mergeOrder(rec: OrderRecord) {
+  const list = getOrders();
+  const i = list.findIndex((o) => o.id === rec.id);
+  if (i >= 0 && list[i].updatedAt > rec.updatedAt) return;
+  saveOrder(rec, true);
+}
+
 export function saveOrder(rec: OrderRecord, silent = false) {
   const list = getOrders();
   const i = list.findIndex((o) => o.id === rec.id);
