@@ -1,4 +1,4 @@
-import { Component, useCallback, useEffect, useRef, useState } from "react";
+import { Component, Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import type { PaymentRecord, PrintFile, PrintOptions } from "./lib/pricing";
@@ -13,7 +13,9 @@ import ReviewScreen from "./screens/ReviewScreen";
 import PaymentScreen from "./screens/PaymentScreen";
 import PrintingScreen from "./screens/PrintingScreen";
 import ReceiptScreen from "./screens/ReceiptScreen";
-import AdminScreen from "./screens/AdminScreen";
+
+/* Admin panel alag chunk mein — customer kiosk ka boot hamesha fast & safe */
+const AdminScreen = lazy(() => import("./screens/AdminScreen"));
 
 type Step = "idle" | "files" | "options" | "review" | "pay" | "printing" | "receipt";
 
@@ -86,7 +88,11 @@ function Kiosk() {
 
   /* ---- realtime cloud sync: orders har admin device par live jaate hain ---- */
   useEffect(() => {
-    startLiveSync("kiosk");
+    try {
+      startLiveSync("kiosk");
+    } catch {
+      /* sync fail ho toh bhi kiosk chalta rahe */
+    }
   }, []);
 
   /* ---- live order sync → admin panel ---- */
@@ -254,14 +260,40 @@ function Kiosk() {
   );
 }
 
+/* admin route ka loading state */
+function AdminLoader() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-ink">
+      <div className="pop-in border-2 border-paper/30 bg-panel px-10 py-8 text-center shadow-press-lg">
+        <p className="font-display text-2xl tracking-wide uppercase">
+          Press Room <span className="text-magenta">khul raha hai…</span>
+        </p>
+        <div className="stripes-live mx-auto mt-3 h-2 w-44 border-2 border-ink" />
+      </div>
+    </div>
+  );
+}
+
 /* ================= Root with routing ================= */
 export default function App() {
+  /* boot watchdog ke liye — app zinda hai */
+  useEffect(() => {
+    window.__JD_APP_MOUNTED__ = true;
+  }, []);
+
   return (
     <ErrorBoundary>
       <HashRouter>
         <Routes>
           <Route path="/" element={<Kiosk />} />
-          <Route path="/admin" element={<AdminScreen />} />
+          <Route
+            path="/admin"
+            element={
+              <Suspense fallback={<AdminLoader />}>
+                <AdminScreen />
+              </Suspense>
+            }
+          />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </HashRouter>
