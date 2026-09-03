@@ -1,9 +1,10 @@
 @import "tailwindcss";
 
 @theme {
-  --font-display: "Anton", "Archivo", sans-serif;
-  --font-body: "Archivo", "Segoe UI", sans-serif;
-  --font-mono: "IBM Plex Mono", "Courier New", monospace;
+  /* System fallbacks: Anton na mile toh Impact/Arial Black same condensed poster look deta hai */
+  --font-display: "Anton", Impact, "Arial Black", "Franklin Gothic Medium", sans-serif;
+  --font-body: "Archivo", "Segoe UI", Tahoma, Verdana, sans-serif;
+  --font-mono: "IBM Plex Mono", "Cascadia Mono", "Courier New", monospace;
 
   --color-ink: #15172b;
   --color-ink-soft: #3a3d56;
