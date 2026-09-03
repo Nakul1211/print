@@ -14,6 +14,29 @@ interface Props {
 
 const IMAGE_EXT = /\.(png|jpe?g|webp|gif|bmp)$/i;
 
+/** Downscale image to a tiny JPEG thumbnail (shown in admin order feed). */
+async function makeThumb(file: File): Promise<string | undefined> {
+  try {
+    if (!file.type.startsWith("image/") || file.size > 6 * 1024 * 1024) return undefined;
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    await new Promise<void>((res, rej) => {
+      img.onload = () => res();
+      img.onerror = () => rej(new Error("image load failed"));
+      img.src = url;
+    });
+    const scale = Math.min(1, 220 / img.naturalWidth);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+    canvas.getContext("2d")?.drawImage(img, 0, 0, canvas.width, canvas.height);
+    URL.revokeObjectURL(url);
+    return canvas.toDataURL("image/jpeg", 0.72);
+  } catch {
+    return undefined;
+  }
+}
+
 export default function UploadScreen({ files, onAdd, onRemove, onNext, onBack }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -45,7 +68,8 @@ export default function UploadScreen({ files, onAdd, onRemove, onNext, onBack }:
             rejected.push(`${file.name} (PDF read nahi ho payi)`);
           }
         } else {
-          added.push({ id, name: file.name, kind: "photo", pages: 1, sizeLabel: formatSize(file.size) });
+          const thumb = await makeThumb(file);
+          added.push({ id, name: file.name, kind: "photo", pages: 1, sizeLabel: formatSize(file.size), thumb });
         }
       }
 

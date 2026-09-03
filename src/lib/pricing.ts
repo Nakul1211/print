@@ -7,6 +7,8 @@ export interface PrintFile {
   kind: "pdf" | "photo";
   pages: number;
   sizeLabel: string;
+  /** small preview thumbnail dataURL (photos only) — shown in admin panel */
+  thumb?: string;
 }
 
 export interface PrintOptions {
@@ -106,10 +108,16 @@ export function makeUpiRef(): string {
   return ref;
 }
 
-export function upiLink(amount: number, note: string, scheme = "upi"): string {
+export function upiLink(
+  amount: number,
+  note: string,
+  scheme = "upi",
+  vpa = SHOP.vpa,
+  payee = SHOP.name
+): string {
   const p = new URLSearchParams({
-    pa: SHOP.vpa,
-    pn: SHOP.name,
+    pa: vpa,
+    pn: payee,
     am: amount.toFixed(2),
     tn: note,
     cu: "INR",

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { IconCheck, IconReg } from "./icons";
+import { Link } from "react-router-dom";
+import { IconCheck, IconReg, IconShield } from "./icons";
 
 /* ---------------- ambient layered background ---------------- */
 export function AmbientBackground() {
@@ -55,6 +56,13 @@ export function Header() {
               {now.toLocaleTimeString("en-IN", { hour12: false })}
             </span>
           </div>
+          <Link
+            to="/admin"
+            className="btn-press flex items-center gap-1.5 border-2 border-ink bg-magenta px-2.5 py-1.5 font-mono text-[11px] font-bold tracking-[0.18em] text-paper shadow-press-sm"
+            title="Admin Panel"
+          >
+            <IconShield size={13} /> ADMIN
+          </Link>
         </div>
       </div>
     </header>
@@ -149,9 +157,12 @@ export function Footer() {
         <p className="font-mono text-[10px] tracking-[0.2em] text-paper/60 uppercase">
           UPI: quickprint.xpress@okhdfcbank
         </p>
-        <p className="font-mono text-[10px] tracking-[0.2em] text-yellow/80 uppercase">
-          Scan · Upload · Pay · Print
-        </p>
+        <Link
+          to="/admin"
+          className="font-mono text-[10px] tracking-[0.2em] text-yellow/80 uppercase underline decoration-dashed underline-offset-4 transition-colors hover:text-yellow"
+        >
+          Admin Panel →
+        </Link>
       </div>
     </footer>
   );

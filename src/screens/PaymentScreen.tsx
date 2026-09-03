@@ -1,8 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import QRCode from "react-qr-code";
 import type { PaymentRecord, PrintOptions, Quote } from "../lib/pricing";
-import { SHOP, inr, inr2, makeOrderId, makeUpiRef, upiLink } from "../lib/pricing";
-import { GlyphGPay, GlyphPaytm, GlyphPhonePe, GlyphUpi, IconArrowL, IconCheck, IconPhone, IconShield } from "../components/icons";
+import { SHOP, inr, makeOrderId, makeUpiRef, upiLink } from "../lib/pricing";
+import { useSettings } from "../lib/store";
+import {
+  GlyphGPay,
+  GlyphPaytm,
+  GlyphPhonePe,
+  GlyphUpi,
+  IconArrowL,
+  IconCheck,
+  IconPhone,
+  IconShield,
+} from "../components/icons";
 
 interface Props {
   quote: Quote;
@@ -14,18 +24,26 @@ interface Props {
 type Phase = "pay" | "verifying" | "success";
 
 const APPS = [
-  { name: "Google Pay", scheme: "tez", glyph: GlyphGPay, chip: "bg-panel" },
-  { name: "PhonePe", scheme: "phonepe", glyph: GlyphPhonePe, chip: "bg-panel" },
-  { name: "Paytm", scheme: "paytm", glyph: GlyphPaytm, chip: "bg-panel" },
-  { name: "BHIM / Any UPI", scheme: "upi", glyph: GlyphUpi, chip: "bg-panel" },
+  { name: "Google Pay", scheme: "tez", glyph: GlyphGPay },
+  { name: "PhonePe", scheme: "phonepe", glyph: GlyphPhonePe },
+  { name: "Paytm", scheme: "paytm", glyph: GlyphPaytm },
+  { name: "BHIM / Any UPI", scheme: "upi", glyph: GlyphUpi },
 ];
 
 export default function PaymentScreen({ quote, options, onSuccess, onBack }: Props) {
+  const settings = useSettings();
   const [phase, setPhase] = useState<Phase>("pay");
   const [method, setMethod] = useState("UPI QR Scan");
+  const [launching, setLaunching] = useState<string | null>(null);
+  const [blockedLink, setBlockedLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const orderIdRef = useRef(makeOrderId());
   const orderId = orderIdRef.current;
   const amount = quote.total;
+
+  const vpa = settings.upiId || SHOP.vpa;
+  const payee = settings.payeeName || SHOP.name;
+  const qrValue = upiLink(amount, orderId, "upi", vpa, payee);
 
   useEffect(() => {
     if (phase !== "verifying") return;
@@ -47,123 +65,183 @@ export default function PaymentScreen({ quote, options, onSuccess, onBack }: Pro
     return () => clearTimeout(t);
   }, [phase, amount, method, orderId, onSuccess]);
 
-  const openApp = (scheme: string, name: string) => {
+  /** Opens the chosen UPI app via its deep link; shows a fallback if blocked. */
+  const launch = (scheme: string, name: string) => {
+    if (phase !== "pay") return;
     setMethod(name);
-    window.location.href = upiLink(amount, orderId, scheme);
+    setBlockedLink(null);
+    setLaunching(name);
+    const link = upiLink(amount, orderId, scheme, vpa, payee);
+    let win: Window | null = null;
+    try {
+      win = window.open(link, "_blank", "noopener");
+    } catch {
+      win = null;
+    }
+    if (!win) setBlockedLink(link);
+    window.setTimeout(() => setLaunching(null), 2600);
+  };
+
+  const copyLink = async () => {
+    const link = blockedLink ?? qrValue;
+    try {
+      await navigator.clipboard.writeText(link);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = link;
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+      } catch {
+        /* ignore */
+      }
+      ta.remove();
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
   };
 
   return (
-    <section className="screen-in relative mx-auto w-full max-w-4xl px-4 pt-8">
+    <section className="screen-in relative mx-auto w-full max-w-5xl px-4 pt-8 pb-12">
       <div className="mb-6">
         <p className="font-mono text-[11px] font-bold tracking-[0.28em] text-amber uppercase">Step 03 / Payment</p>
-        <h2 className="font-display text-4xl tracking-wide uppercase sm:text-5xl">
-          UPI se <span className="text-cyan">pay karo</span>
-        </h2>
+        <div className="flex flex-wrap items-end gap-x-4 gap-y-1">
+          <h2 className="font-display text-4xl tracking-wide uppercase sm:text-5xl">
+            UPI se <span className="text-cyan">pay karo</span>
+          </h2>
+          <p className="mb-1.5 font-mono text-[11px] font-bold tracking-widest text-ink-soft uppercase">
+            {options.color === "bw" ? "B&W" : "Colour"} · {options.size} · {options.duplex ? "Both sides" : "One side"} · ×
+            {options.copies}
+          </p>
+        </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-[0.9fr_1.1fr]">
-        {/* QR panel */}
-        <div className="border-2 border-ink bg-ink p-6 shadow-press-lg">
+      <div className="grid gap-6 md:grid-cols-[1fr_1.15fr]">
+        {/* ---------- QR panel ---------- */}
+        <div className="border-2 border-ink bg-ink p-5 shadow-press-lg sm:p-6">
           <div className="flex items-center justify-between">
-            <p className="font-mono text-[10px] font-bold tracking-[0.28em] text-paper/70 uppercase">Scan & Pay</p>
-            <span className="led h-2.5 w-2.5 rounded-full bg-yellow" />
+            <span className="font-mono text-[10px] font-bold tracking-[0.3em] text-paper/60 uppercase">Scan & Pay</span>
+            <span className="led h-2.5 w-2.5 rounded-full bg-leaf" />
           </div>
 
-          <div className="relative mt-4 border-2 border-ink bg-panel p-5">
-            <QRCode value={upiLink(amount, orderId)} size={196} bgColor="#FBFBF6" fgColor="#15172B" style={{ margin: "0 auto" }} />
-            <span className="absolute -top-3 left-1/2 -translate-x-1/2 border-2 border-ink bg-yellow px-3 py-0.5 font-mono text-xs font-bold shadow-press-sm">
-              {inr2(amount)}
+          <div className="relative mt-5 border-2 border-ink bg-panel p-4">
+            <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 border-2 border-ink bg-yellow px-4 py-0.5 font-display text-2xl tracking-wide shadow-press-sm">
+              {inr(amount)}
             </span>
-          </div>
-
-          <div className="mt-4 space-y-1 font-mono text-[11px] font-semibold tracking-wider text-paper/75">
-            <p className="flex justify-between gap-3">
-              <span className="text-paper/50">ORDER</span>
-              <span className="text-yellow">{orderId}</span>
-            </p>
-            <p className="flex justify-between gap-3">
-              <span className="text-paper/50">VPA</span>
-              <span className="truncate">{SHOP.vpa}</span>
-            </p>
-            <p className="flex justify-between gap-3">
-              <span className="text-paper/50">JOB</span>
-              <span>
-                {options.color === "bw" ? "B&W" : "COLOUR"} · {options.duplex ? "BOTH SIDES" : "ONE SIDE"} · {options.size.toUpperCase()} · ×{options.copies}
-              </span>
+            {settings.qrImage ? (
+              <img
+                src={settings.qrImage}
+                alt="Shop UPI QR"
+                className="mx-auto mt-3 w-56 border border-ink/20 object-contain"
+              />
+            ) : (
+              <QRCode value={qrValue} size={212} bgColor="#FBFBF6" fgColor="#15172B" style={{ margin: "12px auto 0" }} />
+            )}
+            <p className="mt-3 text-center font-mono text-[11px] font-bold tracking-wider break-all">{vpa}</p>
+            <p className="mt-1 text-center font-mono text-[10px] tracking-wider text-ink-soft">
+              {settings.qrImage
+                ? `Scan ke baad amount ${inr(amount)} daal dena`
+                : "QR mein amount auto-fill hai"}
             </p>
           </div>
 
-          <p className="mt-4 flex items-start gap-2 text-xs leading-snug font-medium text-paper/70">
-            <IconPhone size={16} className="mt-0.5 shrink-0 text-cyan" />
-            Kisi bhi UPI app ke scanner se QR scan karo — amount apne aap bhara hua hai.
+          {settings.note && (
+            <p className="mt-3 text-center font-mono text-[10px] tracking-wider text-yellow/90">{settings.note}</p>
+          )}
+          <p className="mt-3 flex items-center justify-center gap-2 font-mono text-[10px] tracking-[0.2em] text-paper/50 uppercase">
+            <IconShield size={13} /> Secure UPI · Order {orderId}
           </p>
         </div>
 
-        {/* apps + confirm */}
+        {/* ---------- app buttons + confirm ---------- */}
         <div className="flex flex-col">
-          <p className="mb-2 font-mono text-[11px] font-bold tracking-[0.24em] uppercase">Ya app se kholo</p>
-          <div className="grid grid-cols-2 gap-3">
-            {APPS.map((app) => (
+          <div className="border-2 border-ink bg-panel p-5 shadow-press">
+            <p className="font-mono text-[10px] font-bold tracking-[0.3em] text-ink-soft uppercase">
+              Ya app se pay karo
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              {APPS.map((a) => (
+                <button
+                  key={a.scheme}
+                  onClick={() => launch(a.scheme, a.name)}
+                  disabled={phase !== "pay"}
+                  className="btn-press group flex items-center gap-3 border-2 border-ink bg-paper px-3.5 py-3 shadow-press-sm hover:bg-yellow/25"
+                >
+                  <a.glyph size={26} />
+                  <span className="text-left leading-tight">
+                    <span className="block text-sm font-extrabold">{a.name}</span>
+                    <span className="font-mono text-[9px] font-bold tracking-[0.18em] text-ink-soft uppercase">
+                      {launching === a.name ? "Khul rahi hai…" : "Open app ↗"}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {blockedLink && (
+              <div className="pop-in mt-3 border-2 border-ink bg-yellow/30 p-3">
+                <p className="text-xs font-bold">
+                  App nahi khuli? Payment link copy karke UPI app / browser mein paste karo:
+                </p>
+                <p className="mt-1 font-mono text-[10px] break-all text-ink-soft">{blockedLink}</p>
+                <button
+                  onClick={copyLink}
+                  className="btn-press mt-2 border-2 border-ink bg-ink px-3 py-1.5 font-mono text-[11px] font-bold tracking-widest text-paper uppercase shadow-press-sm"
+                >
+                  {copied ? "✓ Copied!" : "Copy Link"}
+                </button>
+              </div>
+            )}
+
+            <div className="tear-line mt-4 pt-4">
               <button
-                key={app.name}
-                onClick={() => openApp(app.scheme, app.name)}
-                className="btn-press card-lift flex items-center gap-3 border-2 border-ink bg-panel px-4 py-3.5 text-left shadow-press-sm"
+                onClick={() => setPhase("verifying")}
+                disabled={phase !== "pay"}
+                className="btn-press flex w-full items-center justify-center gap-2 border-2 border-ink bg-leaf px-5 py-3.5 font-display text-xl tracking-wide text-paper uppercase shadow-press-sm"
               >
-                <app.glyph size={26} />
-                <span className="leading-tight">
-                  <span className="block text-sm font-bold">{app.name}</span>
-                  <span className="font-mono text-[9px] font-semibold tracking-[0.18em] text-ink-soft uppercase">Tap to open</span>
-                </span>
+                <IconCheck size={20} /> Maine Pay Kar Diya
               </button>
-            ))}
+              <button
+                onClick={onBack}
+                disabled={phase !== "pay"}
+                className="btn-press mt-3 flex w-full items-center justify-center gap-2 border-2 border-ink bg-paper px-4 py-2 font-mono text-[11px] font-bold tracking-[0.2em] uppercase shadow-press-sm hover:bg-yellow/30"
+              >
+                <IconArrowL size={15} /> Bill par wapas
+              </button>
+            </div>
           </div>
 
-          <div className="mt-5 flex-1 border-2 border-dashed border-ink/40 bg-yellow/15 p-4">
-            <p className="flex items-start gap-2 text-sm leading-relaxed font-semibold">
-              <IconShield size={18} className="mt-0.5 shrink-0 text-leaf" />
-              Payment ho gaya? Neeche confirm karo — kiosk turant print job start kar dega. Galat amount par cancel ho jayega.
+          <div className="mt-4 flex items-center gap-3 border-2 border-dashed border-ink/40 bg-panel/70 px-4 py-3">
+            <IconPhone size={20} className="shrink-0 text-magenta" />
+            <p className="text-xs leading-snug font-medium text-ink-soft">
+              Phone par ho toh app button dabao — <b className="text-ink">{method === "UPI QR Scan" ? "GPay / PhonePe / Paytm" : method}</b>{" "}
+              khulega with amount {inr(amount)}. Desktop par QR scan karo.
             </p>
           </div>
-
-          <button
-            onClick={() => setPhase("verifying")}
-            className="btn-press mt-5 flex w-full items-center justify-center gap-3 border-2 border-ink bg-leaf px-6 py-4 font-display text-2xl tracking-wide text-paper uppercase shadow-press"
-          >
-            <IconCheck size={22} /> Maine Pay Kar Diya
-          </button>
-
-          <button
-            onClick={onBack}
-            className="btn-press mt-3 flex w-full items-center justify-center gap-2 border-2 border-ink bg-panel px-5 py-2.5 font-mono text-xs font-bold tracking-widest uppercase shadow-press-sm"
-          >
-            <IconArrowL size={16} /> Bill par wapas
-          </button>
         </div>
       </div>
 
-      {/* verify / success overlay */}
+      {/* ---------- verify / success overlay ---------- */}
       {phase !== "pay" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/70 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/70 p-4 backdrop-blur-[2px]">
           <div className="pop-in w-full max-w-sm border-2 border-ink bg-panel p-8 text-center shadow-press-lg">
             {phase === "verifying" ? (
               <>
-                <div className="relative mx-auto mb-5 h-16 w-16">
-                  <span className="pulse-ring absolute inset-0 rounded-full border-2 border-leaf" />
-                  <span className="flex h-16 w-16 animate-spin items-center justify-center rounded-full border-4 border-ink border-t-leaf" style={{ animationDuration: "0.9s" }} />
-                </div>
-                <p className="font-display text-2xl tracking-wide uppercase">Payment verify ho raha hai</p>
-                <p className="mt-2 font-mono text-xs font-semibold tracking-widest text-ink-soft uppercase">
-                  {orderId} · {inr2(amount)}
+                <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-ink border-t-magenta" />
+                <h3 className="mt-5 font-display text-2xl tracking-wide uppercase">Payment verify ho rahi hai</h3>
+                <p className="mt-2 font-mono text-[11px] tracking-wider text-ink-soft uppercase">
+                  {orderId} · {inr(amount)} · {method}
                 </p>
               </>
             ) : (
               <>
-                <span className="stamp-in mx-auto mb-5 flex h-20 w-20 items-center justify-center border-4 border-leaf bg-leaf/10 text-leaf">
-                  <IconCheck size={40} />
+                <span className="stamp-in inline-block border-[3px] border-leaf px-5 py-2 font-display text-4xl tracking-[0.15em] text-leaf uppercase">
+                  Paid
                 </span>
-                <p className="font-display text-3xl tracking-wide text-leaf uppercase">Payment Success!</p>
-                <p className="mt-2 font-mono text-xs font-semibold tracking-widest text-ink-soft uppercase">
-                  {inr2(amount)} received · print queue mein bheja ja raha hai…
+                <h3 className="mt-4 font-display text-2xl tracking-wide uppercase">Payment confirm!</h3>
+                <p className="mt-2 font-mono text-[11px] tracking-wider text-ink-soft uppercase">
+                  Admin ko notify ho gaya · Press start ho rahi hai…
                 </p>
               </>
             )}
