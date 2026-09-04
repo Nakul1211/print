@@ -1,0 +1,170 @@
+export type ColorMode = "bw" | "color";
+export type PaperSize = "A4" | "Legal";
+
+export interface PrintFile {
+  id: string;
+  name: string;
+  kind: "pdf" | "photo";
+  pages: number;
+  sizeLabel: string;
+  /** small preview thumbnail dataURL (photos only) — shown in admin panel */
+  thumb?: string;
+}
+
+export interface PrintOptions {
+  color: ColorMode;
+  duplex: boolean;
+  size: PaperSize;
+  copies: number;
+}
+
+export interface PaymentRecord {
+  orderId: string;
+  amount: number;
+  method: string;
+  upiRef: string;
+  paidAt: Date;
+}
+
+/** Rate card — prices fixed by the shop */
+export const RATES = {
+  bw: { single: 5, duplex: 10 },
+  color: { single: 10, duplex: 20 },
+  pdf: { single: 5, duplex: 10 },
+} as const;
+
+export const SHOP = {
+  name: "Jay Dwarkadhish Shop",
+  vpa: "9723121192@hdfcbank",
+  address: "Jay Dwarkadhish Shop · Print & Copy",
+  gstin: "07ABCDE1234F1Z5",
+};
+
+/* ---- UPI VPA validation (NPCI handle list — common banks/apps) ---- */
+const KNOWN_UPI_HANDLES = [
+  "hdfcbank", "ybl", "paytm", "okhdfcbank", "okaxis", "oksbi", "okicici",
+  "axisbank", "icici", "sbi", "pnb", "barodampay", "unionbank", "idbi",
+  "kotak", "indus", "rbl", "sbin", "cnrb", "fbl", "apl", "ibl", "ptsbi",
+  "payzapp", "airtel", "freecharge", "myicici", "ubi", "cbin", "andb",
+  "allbank", "jupitermoney", "naviaxis", "navihdfcbank", "navigoaxis",
+  "naviicici", "navipnb", "navisbi", "naviyesbank", "yesbank", "mahabank",
+  "bom", "centralbank", "dbs", "federal", "indianbank", "iob", "jsbp",
+  "kaypay", "lvbank", "obc", "pingpay", "synd", "syndicate", "tjsb",
+  "united", "vijb", "vjb", "wb", "yesbankltd", "psb", "ucobank",
+];
+
+/* ---- customer kaunsi UPI app use karta hai → uska sahi handle ---- */
+export const UPI_APP_HANDLES = [
+  { app: "Google Pay", handle: "okhdfcbank", hint: "GPay + HDFC account (sabse common)" },
+  { app: "PhonePe", handle: "ybl", hint: "PhonePe se UPI karte ho" },
+  { app: "Paytm", handle: "paytm", hint: "Paytm app se UPI" },
+  { app: "HDFC Bank App", handle: "hdfcbank", hint: "HDFC ke apne app se UPI register kiya" },
+  { app: "Axis Bank", handle: "axisbank", hint: "Axis account linked" },
+  { app: "SBI", handle: "sbi", hint: "SBI / YONO app" },
+] as const;
+
+/** Mobile number + app handle se VPA banao. */
+export function makeVpa(mobile: string, handle: string): string {
+  return `${mobile.trim()}@${handle}`;
+}
+
+/** Returns null if valid, otherwise an error message (payment would fail). */
+export function validateUpiVpa(vpa: string): string | null {
+  const v = vpa.trim();
+  if (!v) return "UPI ID khali hai";
+  const at = v.lastIndexOf("@");
+  if (at <= 0 || at === v.length - 1) return "Sahi format: naam@bank (jaise 9723121192@hdfcbank)";
+  const local = v.slice(0, at);
+  const handle = v.slice(at + 1).toLowerCase();
+  if (!/^[a-zA-Z0-9._-]{2,49}$/.test(local)) return "Naam/number mein sirf letters, digits, . _ - allowed hain";
+  if (!/^[a-z]{2,30}$/.test(handle)) return "Bank handle mein sirf letters hote hain";
+  if (!KNOWN_UPI_HANDLES.includes(handle)) {
+    return `@${handle} unknown handle hai — payment fail hogi. HDFC ke liye @hdfcbank use karo`;
+  }
+  return null;
+}
+
+export const inr = (n: number) =>
+  "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 0 });
+
+export const inr2 = (n: number) =>
+  "₹" + n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+export interface FileLine {
+  file: PrintFile;
+  units: number;
+  unitLabel: string;
+  perUnit: number;
+  subtotal: number;
+}
+
+export interface Quote {
+  lines: FileLine[];
+  perCopy: number;
+  total: number;
+  totalPages: number;
+  totalSheets: number;
+}
+
+/** Per-file pricing: PDF pages @ ₹5/page, photos @ colour-mode rate. Duplex = both sides on one sheet. */
+export function fileQuote(file: PrintFile, opts: PrintOptions): FileLine {
+  const rate = file.kind === "pdf" ? RATES.pdf : RATES[opts.color];
+  const perUnit = opts.duplex ? rate.duplex : rate.single;
+  const units = opts.duplex ? Math.ceil(file.pages / 2) : file.pages;
+  return {
+    file,
+    units,
+    unitLabel: opts.duplex ? "sheet (both sides)" : "page",
+    perUnit,
+    subtotal: units * perUnit,
+  };
+}
+
+export function computeQuote(files: PrintFile[], opts: PrintOptions): Quote {
+  const lines = files.map((f) => fileQuote(f, opts));
+  const perCopy = lines.reduce((s, l) => s + l.subtotal, 0);
+  const totalPages = files.reduce((s, f) => s + f.pages, 0);
+  const totalSheets = lines.reduce((s, l) => s + l.units, 0) * opts.copies;
+  return {
+    lines,
+    perCopy,
+    total: perCopy * opts.copies,
+    totalPages,
+    totalSheets,
+  };
+}
+
+export function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function makeOrderId(): string {
+  const t = Date.now().toString(36).toUpperCase().slice(-4);
+  const r = Math.floor(Math.random() * 90 + 10);
+  return `JD-${t}${r}`;
+}
+
+export function makeUpiRef(): string {
+  let ref = "4";
+  for (let i = 0; i < 11; i++) ref += Math.floor(Math.random() * 10);
+  return ref;
+}
+
+export function upiLink(
+  amount: number,
+  note: string,
+  scheme = "upi",
+  vpa = SHOP.vpa,
+  payee = SHOP.name
+): string {
+  const p = new URLSearchParams({
+    pa: vpa,
+    pn: payee,
+    am: amount.toFixed(2),
+    tn: note,
+    cu: "INR",
+  });
+  return `${scheme}://pay?${p.toString()}`;
+}
