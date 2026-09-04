@@ -5,7 +5,7 @@ import type { PaymentRecord, PrintFile, PrintOptions } from "./lib/pricing";
 import { computeQuote, inr } from "./lib/pricing";
 import { AmbientBackground, Footer, Header, Stepper, Ticker } from "./components/Chrome";
 import { getOrder, patchOrder, saveOrder, toMeta } from "./lib/store";
-import { startLiveSync } from "./lib/sync";
+import { pushOrderFiles, startLiveSync } from "./lib/sync";
 import IdleScreen from "./screens/IdleScreen";
 import UploadScreen from "./screens/UploadScreen";
 import OptionsScreen from "./screens/OptionsScreen";
@@ -175,6 +175,8 @@ function Kiosk() {
         `Payment confirmed — ${inr(p.amount)} via ${p.method}`
       );
       patchOrder(id, {}, "Press started — printing job");
+      /* files turant admin devices ko push karo — customer phone band kare toh bhi files safe */
+      void pushOrderFiles(filesRef.current.map((f) => ({ id: f.id, kind: f.kind }))).catch(() => {});
     }
   }, []);
 
