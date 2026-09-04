@@ -41,9 +41,10 @@ type Msg =
   | { t: "clr" }
   | { t: "hi"; role: SyncRole }
   | { t: "req" }
-  | { t: "f-req"; fid: string; name: string; mime: string }
-  | { t: "f-meta"; fid: string; n: number; mime: string }
-  | { t: "f-ch"; fid: string; i: number; d: string };
+  | { t: "f-req"; fid: string; name: string; mime: string; need?: number[] }
+  | { t: "f-meta"; fid: string; n: number; mime: string; total: number }
+  | { t: "f-ch"; fid: string; i: number; d: string }
+  | { t: "f-end"; fid: string; n: number };
 
 interface Envelope {
   v: 1;
@@ -119,79 +120,186 @@ function send(m: Msg) {
   }
 }
 
-/* ---------- file transfer (on-demand, chunked) ---------- */
+/* ---------- file transfer (on-demand, chunked, ARQ = missing re-request) ----------
+ * Public MQTT brokers bade/tez messages drop kar dete hain, isliye:
+ *  - chhote chunks (16KB) rakhe hain
+ *  - admin missing chunks ko khud dobara maangta hai (har 1.8s)
+ *  - kiosk ek baar padhi file cache rakhta hai taaki re-request turant mile
+ */
+const FILE_CHUNK = 16000; /* raw bytes per chunk (~21KB base64 — broker safe) */
+const serveCache = new Map<string, { buf: Uint8Array; mime: string; n: number }>();
+
 interface PendingFile {
   n: number;
+  total: number;
   got: Map<number, string>;
   mime: string;
+  name: string;
   resolve: (b: Blob | null) => void;
-  timer: number;
+  onProgress?: (got: number, total: number) => void;
+  deadline: number;
+  retryTimer: number;
 }
 const pendingFiles = new Map<string, PendingFile>();
 
 /** Kiosk se original file mangwao (admin device par print ke liye). */
-export function requestFile(fid: string, name: string, mime: string, timeoutMs = 30000): Promise<Blob | null> {
+export function requestFile(
+  fid: string,
+  name: string,
+  mime: string,
+  opts?: { timeoutMs?: number; onProgress?: (got: number, total: number) => void }
+): Promise<Blob | null> {
+  const timeoutMs = opts?.timeoutMs ?? 60000;
   return new Promise((resolve) => {
+    /* agar pehle se pending hai toh wahi reuse karo */
+    if (pendingFiles.has(fid)) {
+      const existing = pendingFiles.get(fid)!;
+      const oldResolve = existing.resolve;
+      existing.resolve = (b) => {
+        oldResolve(b);
+        resolve(b);
+      };
+      return;
+    }
+
+    const finish = (b: Blob | null) => {
+      const p = pendingFiles.get(fid);
+      if (p) {
+        window.clearTimeout(p.retryTimer);
+        pendingFiles.delete(fid);
+      }
+      resolve(b);
+    };
+
     const p: PendingFile = {
       n: -1,
+      total: -1,
       got: new Map(),
       mime,
-      resolve,
-      timer: window.setTimeout(() => {
-        pendingFiles.delete(fid);
-        resolve(null);
-      }, timeoutMs),
+      name,
+      resolve: finish,
+      onProgress: opts?.onProgress,
+      deadline: Date.now() + timeoutMs,
+      retryTimer: 0,
     };
     pendingFiles.set(fid, p);
+
+    /* pehla request + regular ARQ re-request loop */
     send({ t: "f-req", fid, name, mime });
-    /* ek aur request 3s baad (agar pehli connect se pehle thi) */
-    window.setTimeout(() => {
-      if (pendingFiles.has(fid)) send({ t: "f-req", fid, name, mime });
-    }, 3000);
+    p.retryTimer = window.setInterval(() => {
+      const cur = pendingFiles.get(fid);
+      if (!cur) return;
+      if (Date.now() > cur.deadline) {
+        finish(null);
+        return;
+      }
+      if (cur.n > 0) {
+        /* missing chunks dobara maango */
+        const missing: number[] = [];
+        for (let i = 0; i < cur.n; i++) if (!cur.got.has(i)) missing.push(i);
+        if (missing.length > 0) send({ t: "f-req", fid, name, mime, need: missing.slice(0, 24) });
+      } else {
+        /* meta hi nahi mili — poora request dobara */
+        send({ t: "f-req", fid, name, mime });
+      }
+    }, 1800);
   });
 }
 
-async function serveFile(fid: string, mime: string) {
+async function serveFile(fid: string, mime: string, need?: number[]) {
   try {
-    const blob = await getFile(fid);
-    if (!blob) return;
-    const buf = new Uint8Array(await blob.arrayBuffer());
-    const CHUNK = 40000;
-    const n = Math.max(1, Math.ceil(buf.length / CHUNK));
-    send({ t: "f-meta", fid, n, mime: mime || blob.type || "application/octet-stream" });
-    for (let i = 0; i < n; i++) {
-      const slice = buf.subarray(i * CHUNK, (i + 1) * CHUNK);
+    let cached = serveCache.get(fid);
+    if (!cached) {
+      const blob = await getFile(fid);
+      if (!blob) return;
+      const buf = new Uint8Array(await blob.arrayBuffer());
+      cached = { buf, mime: mime || blob.type || "application/octet-stream", n: Math.max(1, Math.ceil(buf.length / FILE_CHUNK)) };
+      serveCache.set(fid, cached);
+      /* memory limit — sirf recent 4 files cache mein */
+      if (serveCache.size > 4) {
+        const firstKey = serveCache.keys().next().value;
+        if (firstKey) serveCache.delete(firstKey);
+      }
+    }
+    const { buf, n } = cached;
+    const indices = need && need.length > 0 ? need.filter((i) => i >= 0 && i < n) : Array.from({ length: n }, (_, i) => i);
+    if (indices.length === n) {
+      send({ t: "f-meta", fid, n, mime: cached.mime, total: buf.length });
+    }
+    for (const i of indices) {
+      const slice = buf.subarray(i * FILE_CHUNK, (i + 1) * FILE_CHUNK);
       send({ t: "f-ch", fid, i, d: bytesToBase64(slice) });
-      await sleep(35);
+      await sleep(20);
+    }
+    if (indices.length === n) {
+      send({ t: "f-end", fid, n });
     }
   } catch {
     /* file read fail — ignore */
   }
 }
 
-function handleFileChunk(m: Extract<Msg, { t: "f-meta" } | { t: "f-ch" }>) {
-  const fid = m.fid;
+/**
+ * Payment confirm hote hi kiosk apni saari files channel par push kar deta hai —
+ * online admin devices unhe turant store kar lete hain. Isse customer phone band
+ * kar de tab bhi files admin ke paas reh jaati hain.
+ */
+export async function pushOrderFiles(files: { id: string; kind: "pdf" | "photo" }[]) {
+  for (const f of files) {
+    const mime = f.kind === "pdf" ? "application/pdf" : "image/jpeg";
+    void serveFile(f.id, mime);
+    await sleep(400);
+  }
+}
+
+function tryAssemble(fid: string) {
   const p = pendingFiles.get(fid);
-  if (!p) return;
+  if (!p || p.n <= 0 || p.got.size < p.n) return;
+  const parts: BlobPart[] = [];
+  for (let i = 0; i < p.n; i++) {
+    const d = p.got.get(i);
+    if (!d) return; /* abhi missing — ARQ dobara maangega */
+    parts.push(base64ToBytes(d) as BlobPart);
+  }
+  const blob = new Blob(parts, { type: p.mime });
+  void putFile(fid, blob).catch(() => {});
+  p.resolve(blob);
+}
+
+function handleFileChunk(m: Extract<Msg, { t: "f-meta" } | { t: "f-ch" } | { t: "f-end" }>) {
+  let p = pendingFiles.get(m.fid);
+  if (!p) {
+    /* koi request nahi thi — yeh kiosk ka proactive push hai; auto-accept karke store karo */
+    p = {
+      n: -1,
+      total: -1,
+      got: new Map(),
+      mime: "application/octet-stream",
+      name: "",
+      resolve: () => {},
+      deadline: Date.now() + 60000,
+      retryTimer: 0,
+    };
+    pendingFiles.set(m.fid, p);
+    /* adhoora push 70s baad saaf kar do */
+    window.setTimeout(() => {
+      const cur = pendingFiles.get(m.fid);
+      if (cur && cur.retryTimer === 0 && (cur.n <= 0 || cur.got.size < cur.n)) pendingFiles.delete(m.fid);
+    }, 70000);
+  }
   if (m.t === "f-meta") {
     p.n = m.n;
+    p.total = m.total;
     p.mime = m.mime;
-  } else {
+  } else if (m.t === "f-ch") {
     p.got.set(m.i, m.d);
+    const totalChunks = p.n > 0 ? p.n : Math.max(p.got.size, 1);
+    p.onProgress?.(p.got.size, totalChunks);
+  } else {
+    /* f-end — agar meta gir gaya ho toh n yahin se le lo */
+    if (p.n <= 0) p.n = m.n;
   }
-  if (p.n > 0 && p.got.size >= p.n) {
-    const parts: BlobPart[] = [];
-    for (let i = 0; i < p.n; i++) {
-      const d = p.got.get(i);
-      if (!d) return; /* missing chunk — wait */
-      parts.push(base64ToBytes(d) as BlobPart);
-    }
-    const blob = new Blob(parts, { type: p.mime });
-    void putFile(fid, blob).catch(() => {});
-    window.clearTimeout(p.timer);
-    pendingFiles.delete(fid);
-    p.resolve(blob);
-  }
+  tryAssemble(m.fid);
 }
 
 /* ---------- snapshot (naya device juda → purane orders le lo) ---------- */
@@ -235,10 +343,11 @@ function handle(payload: unknown) {
         void sendSnapshot();
         break;
       case "f-req":
-        void serveFile(m.fid, m.mime);
+        void serveFile(m.fid, m.mime, m.need);
         break;
       case "f-meta":
       case "f-ch":
+      case "f-end":
         handleFileChunk(m);
         break;
     }

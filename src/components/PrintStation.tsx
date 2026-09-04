@@ -83,12 +83,16 @@ export default function PrintStation({ order, onClose, onDone }: Props) {
           let blob = await getFile(f.id);
           if (!blob) {
             /* file isi device par nahi — kiosk se relay ke zariye mangwao */
-            setProgress(`${f.name} — kiosk device se mangwayi ja rahi hai…`);
+            setProgress(`${f.name} — kiosk device se aa rahi hai…`);
             blob =
               (await requestFile(
                 f.id,
                 f.name,
-                f.kind === "pdf" ? "application/pdf" : "image/jpeg"
+                f.kind === "pdf" ? "application/pdf" : "image/jpeg",
+                {
+                  onProgress: (got, total) =>
+                    setProgress(`${f.name} — ${got}/${total} parts mile (${Math.round((got / total) * 100)}%)`),
+                }
               )) ?? undefined;
           }
           if (!blob)
